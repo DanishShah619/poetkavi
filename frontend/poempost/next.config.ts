@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+
+const nextConfig: NextConfig = {
+  images: {
+    domains: ['res.cloudinary.com', 'api.dicebear.com'],
+  },
   async headers() {
     return [
       {
@@ -20,8 +23,4 @@ const nextConfig = {
   }
 };
 
-module.exports = nextConfig;
-
-
-
-
+export default nextConfig;

@@ -1,5 +1,6 @@
 "use client";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 
 export default function CardDemo() {
@@ -13,9 +14,9 @@ export default function CardDemo() {
       >
         <div className="absolute w-full h-full top-0 left-0 transition duration-300 group-hover/card:bg-black opacity-60"></div>
         <div className="flex flex-row items-center space-x-4 z-10">
-          <img
-            height="100"
-            width="100"
+          <Image
+            height={100}
+            width={100}
             alt="Avatar"
             src="/manu.png"
             className="h-10 w-10 rounded-full border-2 object-cover"

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getAuth } from "firebase/auth";
+import { useEffect, useState, useRef } from "react";
+import Image from "next/image";
+import { useAuth } from "@/context/AuthContext";
 import {
   collection,
   query,
@@ -12,7 +13,6 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
-  increment,
   addDoc,
   serverTimestamp,
   onSnapshot,
@@ -37,7 +37,7 @@ interface Comment {
   text: string;
   authorEmail: string;
   authorId: string;
-  createdAt: any;
+  createdAt: { seconds: number; nanoseconds: number } | null;
   poemId: string;
 }
 
@@ -47,8 +47,7 @@ interface Poem {
   content?: string;
   imageUrl?: string;
   createdAt?: { seconds: number; nanoseconds: number };
-  likes?: number;
-  likedBy?: string[];
+  likes: string[];
 }
 
 export default function MyPoems() {
@@ -57,7 +56,49 @@ export default function MyPoems() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [loadingComment, setLoadingComment] = useState(false);
-  const user = getAuth().currentUser;
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const { currentUser: user } = useAuth();
+
+  const positions = useRef<Record<string, { x: number; y: number; angle: number }>>({});
+
+  const getPosition = (id: string) => {
+    if (!positions.current[id]) {
+      positions.current[id] = { x: randomX(), y: randomY(), angle: randomAngle() };
+    }
+    return positions.current[id];
+  };
+
+  const fetchCommentCounts = async (poemIds: string[]) => {
+    if (poemIds.length === 0) return;
+    const counts: Record<string, number> = {};
+    poemIds.forEach((id) => {
+      counts[id] = 0;
+    });
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < poemIds.length; i += 30) {
+      chunks.push(poemIds.slice(i, i + 30));
+    }
+
+    try {
+      for (const chunk of chunks) {
+        const q = query(
+          collection(db, "comments"),
+          where("poemId", "in", chunk)
+        );
+        const snap = await getDocs(q);
+        snap.docs.forEach((doc) => {
+          const data = doc.data();
+          if (data.poemId) {
+            counts[data.poemId] = (counts[data.poemId] || 0) + 1;
+          }
+        });
+      }
+      setCommentCounts(counts);
+    } catch (err) {
+      console.error("Error fetching comment counts:", err);
+    }
+  };
 
   useEffect(() => {
     const fetchPoems = async () => {
@@ -71,7 +112,14 @@ export default function MyPoems() {
 
       const snap = await getDocs(q);
       const data = snap.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() } as Poem))
+        .map((doc) => {
+          const docData = doc.data();
+          return {
+            id: doc.id,
+            ...docData,
+            likes: Array.isArray(docData.likes) ? docData.likes : [],
+          } as Poem;
+        })
         .filter(
           (poem) =>
             (poem.content && !poem.imageUrl) ||
@@ -79,6 +127,7 @@ export default function MyPoems() {
         );
 
       setPoems(data);
+      fetchCommentCounts(data.map((p) => p.id));
     };
 
     fetchPoems();
@@ -110,8 +159,7 @@ export default function MyPoems() {
     const ref = doc(db, "poems", poemId);
 
     await updateDoc(ref, {
-      likes: increment(isLiked ? -1 : 1),
-      likedBy: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+      likes: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
     });
 
     setPoems((prev) =>
@@ -119,10 +167,9 @@ export default function MyPoems() {
         poem.id === poemId
           ? {
               ...poem,
-              likes: (poem.likes || 0) + (isLiked ? -1 : 1),
-              likedBy: isLiked
-                ? (poem.likedBy ?? []).filter((id: string) => id !== user.uid)
-                : [...(poem.likedBy ?? []), user.uid],
+              likes: isLiked
+                ? (poem.likes ?? []).filter((uid) => uid !== user.uid)
+                : [...(poem.likes ?? []), user.uid],
             }
           : poem
       )
@@ -143,6 +190,10 @@ export default function MyPoems() {
         createdAt: serverTimestamp(),
       });
       setNewComment("");
+      setCommentCounts((prev) => ({
+        ...prev,
+        [poemId]: (prev[poemId] || 0) + 1,
+      }));
     } catch (error) {
       console.error("Error adding comment:", error);
     } finally {
@@ -185,7 +236,7 @@ export default function MyPoems() {
                           {comment.authorEmail}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {comment.createdAt &&
+                          {comment.createdAt && typeof comment.createdAt.seconds === "number" &&
                             format(
                               new Date(comment.createdAt.seconds * 1000),
                               "dd MMM yyyy"
@@ -226,12 +277,18 @@ export default function MyPoems() {
 
       <DraggableCardContainer className="relative w-full h-screen overflow-clip">
         {poems.map((poem) => {
-          const isLiked = user?.uid ? poem.likedBy?.includes(user.uid) : false;
+          const isLiked = user?.uid ? (poem.likes ?? []).includes(user.uid) : false;
+          const pos = getPosition(poem.id);
 
           return (
             <DraggableCardBody
               key={poem.id}
-              className={`absolute top-[${randomY()}%] left-[${randomX()}%] rotate-[${randomAngle()}deg]`}
+              style={{
+                position: "absolute",
+                top: `${pos.y}%`,
+                left: `${pos.x}%`,
+                transform: `rotate(${pos.angle}deg)`,
+              }}
             >
               <div
                 className={cn(
@@ -250,9 +307,11 @@ export default function MyPoems() {
 
                 {/* Image */}
                 {poem.imageUrl && (
-                  <img
+                  <Image
                     src={poem.imageUrl}
                     alt="Poem"
+                    width={320}
+                    height={208}
                     className="w-full h-52 object-contain rounded mb-3"
                   />
                 )}
@@ -266,42 +325,42 @@ export default function MyPoems() {
 
                 {/* Footer: Date, Likes, Comments */}
                 <div className="flex flex-col items-start mt-3 px-2 text-sm text-gray-600 space-y-2">
-  <span>
-    {poem.createdAt && typeof poem.createdAt.seconds === "number"
-      ? format(
-          new Date(poem.createdAt.seconds * 1000),
-          "dd MMM yyyy"
-        )
-      : ""}
-  </span>
+                  <span>
+                    {poem.createdAt && typeof poem.createdAt.seconds === "number"
+                      ? format(
+                          new Date(poem.createdAt.seconds * 1000),
+                          "dd MMM yyyy"
+                        )
+                      : ""}
+                  </span>
 
-  <div className="flex items-center space-x-4">
-    {/* Like Button */}
-    <motion.button
-      whileTap={{ scale: 1.4 }}
-      whileHover={{ scale: 1.1 }}
-      onClick={() => toggleLike(poem.id, !!isLiked)}
-      className={cn(
-        "transition-colors duration-150 flex items-center space-x-1",
-        isLiked ? "text-red-600" : "text-gray-400 hover:text-red-600"
-      )}
-    >
-      <span>{isLiked ? "💖" : "🤍"}</span>
-      <span>{typeof poem.likes === "number" ? poem.likes : 0}</span>
-    </motion.button>
+                  <div className="flex items-center space-x-4">
+                    {/* Like Button */}
+                    <motion.button
+                      whileTap={{ scale: 1.4 }}
+                      whileHover={{ scale: 1.1 }}
+                      onClick={() => toggleLike(poem.id, !!isLiked)}
+                      className={cn(
+                        "transition-colors duration-150 flex items-center space-x-1",
+                        isLiked ? "text-red-600" : "text-gray-400 hover:text-red-600"
+                      )}
+                    >
+                      <span>{isLiked ? "💖" : "🤍"}</span>
+                      <span>{poem.likes?.length ?? 0}</span>
+                    </motion.button>
 
-    {/* Comment Button */}
-    <motion.button
-      whileTap={{ scale: 1.1 }}
-      whileHover={{ scale: 1.05 }}
-      onClick={() => setShowComments(poem.id)}
-      className="flex items-center space-x-1 text-gray-400 hover:text-blue-600 transition-colors duration-150"
-    >
-      <MessageCircle className="w-4 h-4" />
-      <span>{comments.filter((c) => c.poemId === poem.id).length}</span>
-                </motion.button>
-  </div>
-</div>
+                    {/* Comment Button */}
+                    <motion.button
+                      whileTap={{ scale: 1.1 }}
+                      whileHover={{ scale: 1.05 }}
+                      onClick={() => setShowComments(poem.id)}
+                      className="flex items-center space-x-1 text-gray-400 hover:text-blue-600 transition-colors duration-150"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>{commentCounts[poem.id] ?? 0}</span>
+                    </motion.button>
+                  </div>
+                </div>
               </div>
             </DraggableCardBody>
           );

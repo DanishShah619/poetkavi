@@ -153,3 +153,69 @@
     }
   }
 }
+
+/* Tiptap Editor & Collaboration Cursors */
+.prose .tiptap {
+  outline: none;
+  min-height: 300px;
+}
+
+.prose .tiptap p {
+  margin-bottom: 0.75rem;
+}
+
+.prose .tiptap ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.prose .tiptap ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.prose .tiptap h1,
+.prose .tiptap h2,
+.prose .tiptap h3 {
+  font-weight: bold;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: #fff;
+}
+
+.prose .tiptap h1 { font-size: 1.875rem; }
+.prose .tiptap h2 { font-size: 1.5rem; }
+.prose .tiptap h3 { font-size: 1.25rem; }
+
+.collaboration-cursor__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 2px solid;
+  border-right: 2px solid;
+  border-color: currentColor;
+  word-break: normal;
+  pointer-events: none;
+}
+
+.collaboration-cursor__label {
+  position: absolute;
+  top: -1.4em;
+  left: -2px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  user-select: none;
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border-top-left-radius: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  background-color: inherit;
+}
+

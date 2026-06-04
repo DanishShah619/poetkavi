@@ -133,7 +133,7 @@ export interface AuthFormValidation {
 }
 
 // API response types (if you use a backend)
-export interface AuthApiResponse<T = any> {
+export interface AuthApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;

@@ -3,6 +3,19 @@ import { useEffect, useState } from "react";
 import { motion, stagger, useAnimate } from "motion/react";
 import { cn } from "@/lib/utils";
 
+const COLORS = [
+  "rgb(131, 179, 32)",
+  "rgb(47, 195, 106)",
+  "rgb(42, 169, 210)",
+  "rgb(4, 112, 202)",
+  "rgb(107, 10, 255)",
+  "rgb(183, 0, 218)",
+  "rgb(218, 0, 171)",
+  "rgb(230, 64, 92)",
+  "rgb(232, 98, 63)",
+  "rgb(249, 129, 47)",
+];
+
 export const AnimatedText = ({
   words,
   className,
@@ -21,32 +34,9 @@ export const AnimatedText = ({
   colorChangeInterval?: number;
 }) => {
   const [scope, animate] = useAnimate();
-  const [currentColors, setCurrentColors] = useState([
-    "rgb(131, 179, 32)",
-    "rgb(47, 195, 106)",
-    "rgb(42, 169, 210)",
-    "rgb(4, 112, 202)",
-    "rgb(107, 10, 255)",
-    "rgb(183, 0, 218)",
-    "rgb(218, 0, 171)",
-    "rgb(230, 64, 92)",
-    "rgb(232, 98, 63)",
-    "rgb(249, 129, 47)",
-  ]);
+  const [currentColors, setCurrentColors] = useState(COLORS);
   const [colorCount, setColorCount] = useState(0);
 
-  const colors = [
-    "rgb(131, 179, 32)",
-    "rgb(47, 195, 106)",
-    "rgb(42, 169, 210)",
-    "rgb(4, 112, 202)",
-    "rgb(107, 10, 255)",
-    "rgb(183, 0, 218)",
-    "rgb(218, 0, 171)",
-    "rgb(230, 64, 92)",
-    "rgb(232, 98, 63)",
-    "rgb(249, 129, 47)",
-  ];
 
   // Generate effect animation
   useEffect(() => {
@@ -63,13 +53,13 @@ export const AnimatedText = ({
         }
       );
     }
-  }, [scope.current, effect, filter, duration, staggerDelay, animate]);
+  }, [animate, effect, filter, duration, staggerDelay]);
 
   // Colorful effect animation
   useEffect(() => {
     if (effect === "colorful" || effect === "both") {
       const interval = setInterval(() => {
-        const shuffled = [...colors].sort(() => Math.random() - 0.5);
+        const shuffled = [...COLORS].sort(() => Math.random() - 0.5);
         setCurrentColors(shuffled);
         setColorCount((prev) => prev + 1);
       }, colorChangeInterval);

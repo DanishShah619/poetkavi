@@ -5,11 +5,20 @@ import { Edit } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
-import { getAuth ,User} from "firebase/auth"
+import { useAuth } from "@/context/AuthContext"
+import Image from "next/image"
+
+interface UserProfile {
+  username?: string;
+  bio?: string;
+  profilePic?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
 
 export function CardDemo() {
-  const user = getAuth().currentUser
-  const [profile, setProfile] = useState<any>(null)
+  const { currentUser: user } = useAuth()
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [editing, setEditing] = useState(false)
   const [username, setUsername] = useState("")
   const [bio, setBio] = useState("")
@@ -116,9 +125,9 @@ export function CardDemo() {
 
         {/* Author Info */}
         <div className="flex flex-row items-center space-x-4 z-10">
-          <img
-            height="100"
-            width="100"
+          <Image
+            height={100}
+            width={100}
             alt="Avatar"
             src={user?.photoURL || getGeneratedAvatar()}
             className="h-10 w-10 rounded-full border-2 object-cover"

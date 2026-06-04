@@ -1,215 +1,80 @@
 "use client";
 
-import Navbar from "@/components/ui/Navbar";
-import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
-import { getAuth, onAuthStateChanged, signOut, User } from "firebase/auth";
+import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Navbar from "@/components/ui/Navbar";
 import { Meteors } from "@/components/ui/meteors";
-import { db } from "@/lib/firebase";
-import { 
-  collection, 
-  getDocs, 
-  orderBy, 
-  query, 
-  updateDoc, 
-  doc, 
-  arrayUnion, 
-  arrayRemove,
-  where,
-  Timestamp
-} from "firebase/firestore";
-import { BackgroundGradient } from "@/components/ui/background-gradient";
-import { Search, Heart, Calendar, User as UserIcon, Filter } from "lucide-react";
-
-interface Poem {
-  id: string;
-  title: string;
-  content: string;
-  font: string;
-  imageUrl?: string;
-  createdAt: any;
-  authorId: string;
-  authorEmail: string;
-  likes: string[];
-}
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
+import { useDebounce } from "@/hooks/useDebounce";
+import { useInfiniteFeed } from "@/hooks/useInfiniteFeed";
+import { PoemFeedCard } from "@/components/explore/PoemFeedCard";
+import { PoemCardSkeleton } from "@/components/explore/PoemCardSkeleton";
+import { Search, Filter } from "lucide-react";
 
 const ExplorePage: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [poems, setPoems] = useState<Poem[]>([]);
-  const [filteredPoems, setFilteredPoems] = useState<Poem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { currentUser: user, loading: authLoading, logOut } = useAuth();
+  const router = useRouter();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [fontFilter, setFontFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
-  const router = useRouter();
 
+  const debouncedSearch = useDebounce(searchTerm, 400);
+
+  // Auth guard
   useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    fetchPoems();
-  }, [user]);
-
-  useEffect(() => {
-    filterAndSortPoems();
-  }, [poems, searchTerm, fontFilter, sortBy]);
-
-  const fetchPoems = async () => {
-    if (!user) return;
-    
-    try {
-      // Calculate 24 hours ago
-      const twentyFourHoursAgo = new Date();
-      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
-      const twentyFourHoursAgoTimestamp = Timestamp.fromDate(twentyFourHoursAgo);
-      
-      // Query for poems from other users in the last 24 hours
-      const q = query(
-        collection(db, "poems"),
-        where("authorId", "!=", user.uid),
-        where("createdAt", ">=", twentyFourHoursAgoTimestamp),
-        orderBy("authorId"),
-        orderBy("createdAt", "desc")
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const poemsData: Poem[] = [];
-      
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        poemsData.push({
-          id: doc.id,
-          ...data,
-          likes: Array.isArray(data.likes) ? data.likes : []
-        } as Poem);
-      });
-      
-      setPoems(poemsData);
-    } catch (error) {
-      console.error("Error fetching poems:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterAndSortPoems = () => {
-    let filtered = poems.filter(poem => {
-      const matchesSearch = poem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           poem.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           poem.authorEmail.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesFont = fontFilter === "all" || poem.font === fontFilter;
-      
-      return matchesSearch && matchesFont;
-    });
-
-    // Sort poems
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "newest":
-          return b.createdAt?.seconds - a.createdAt?.seconds;
-        case "oldest":
-          return a.createdAt?.seconds - b.createdAt?.seconds;
-        case "most-liked":
-          return (b.likes?.length || 0) - (a.likes?.length || 0);
-        case "title":
-          return a.title.localeCompare(b.title);
-        default:
-          return 0;
-      }
-    });
-
-    setFilteredPoems(filtered);
-  };
-
-  const handleLike = async (poemId: string) => {
-    if (!user) return;
-    
-    try {
-      const poemRef = doc(db, "poems", poemId);
-      const poem = poems.find(p => p.id === poemId);
-      
-      if (poem?.likes?.includes(user.uid)) {
-        // Unlike
-        await updateDoc(poemRef, {
-          likes: arrayRemove(user.uid)
-        });
-      } else {
-        // Like
-        await updateDoc(poemRef, {
-          likes: arrayUnion(user.uid)
-        });
-      }
-      
-      // Update local state
-      setPoems(prevPoems =>
-        prevPoems.map(p =>
-          p.id === poemId
-            ? {
-                ...p,
-                likes: (p.likes || []).includes(user.uid)
-                  ? (p.likes || []).filter(uid => uid !== user.uid)
-                  : [...(p.likes || []), user.uid]
-              }
-            : p
-        )
-      );
-    } catch (error) {
-      console.error("Error updating like:", error);
-    }
-  };
-
-  const handleLogout = async () => {
-    const auth = getAuth();
-    try {
-      await signOut(auth);
-      console.log("Signed out successfully");
+    if (!authLoading && !user) {
       router.push("/signin");
-    } catch (error) {
-      console.error("Logout failed:", error);
     }
-  };
+  }, [authLoading, user, router]);
 
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return "";
-    const date = new Date(timestamp.seconds * 1000);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    });
-  };
+  const {
+    poems,
+    loading,
+    loadingMore,
+    hasMore,
+    error,
+    loadMore,
+    handleLike,
+  } = useInfiniteFeed({
+    userId: user?.uid ?? "",
+    debouncedSearch,
+    fontFilter,
+    sortBy,
+  });
 
-  const getFontClass = (font: string) => {
-    const fontMap: { [key: string]: string } = {
-      inter: "font-inter",
-      serif: "font-serif",
-      dancing: "font-dancing",
-      handwriting: "font-handwriting",
-      greatvibes: "font-greatvibes",
-      cinzel: "font-cinzel",
-      indie: "font-indie"
-    };
-    return fontMap[font] || "font-inter";
-  };
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  if (loading) {
+  // Intersection Observer for Infinite Scroll
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasMore && !loadingMore && !loading) {
+          loadMore();
+        }
+      },
+      { rootMargin: "200px" } // trigger load 200px before reaching the bottom
+    );
+
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, loadMore]);
+
+  if (authLoading) {
     return (
       <div className="relative min-h-screen w-full bg-black/[0.96] antialiased flex items-center justify-center">
-        <div className="text-white text-xl">Loading poems...</div>
+        <div className="text-white text-xl">Loading...</div>
       </div>
     );
   }
 
+  if (!user) return null;
+
   return (
     <div className="relative min-h-screen w-full bg-black/[0.96] antialiased">
-      {/* Grid pattern background */}
       <div
         className={cn(
           "pointer-events-none absolute inset-0 z-0 [background-size:40px_40px] select-none",
@@ -217,27 +82,22 @@ const ExplorePage: React.FC = () => {
         )}
       />
 
-      {/* Animated Meteors */}
       <Meteors number={25} className="w-full py-6">
         <Navbar
-          userEmail={user?.email || "user@example.com"}
-          userPhoto={user?.photoURL || ""}
-          onLogout={handleLogout}
+          userEmail={user.email || ""}
+          userPhoto={user.photoURL || ""}
+          onLogout={logOut}
         />
-        <div className="pt-10"></div>
+        <div className="pt-10" />
 
-        {/* Header and Controls */}
         <div className="w-full max-w-4xl mx-auto pt-8 px-4">
+          {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Explore Recent Poems
-            </h1>
-            <p className="text-gray-400">
-              Discover poems written by others in the last 24 hours
-            </p>
+            <h1 className="text-3xl font-bold text-white mb-2">Explore Poems</h1>
+            <p className="text-gray-400">Discover beautiful poetry written by the community</p>
           </div>
 
-          {/* Search and Filter Controls */}
+          {/* Search & Filters */}
           <div className="mb-8 space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -282,101 +142,84 @@ const ExplorePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Poems Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPoems.map((poem) => (
-              <BackgroundGradient key={poem.id} className="rounded-2xl p-[1px]">
-                <div className="rounded-2xl bg-neutral-900 p-6 border border-white/10 h-full flex flex-col">
-                  {/* Poem Header */}
-                  <div className="mb-4">
-                    <h3 className={`text-xl font-bold text-white mb-2 ${getFontClass(poem.font)}`}>
-                      {poem.title}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                      <UserIcon className="h-4 w-4" />
-                      <span>{poem.authorEmail}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-400 mt-1">
-                      <Calendar className="h-4 w-4" />
-                      <span>{formatDate(poem.createdAt)}</span>
-                    </div>
-                  </div>
-
-                  {/* Poem Content */}
-                  <div className="flex-1 mb-4">
-                    {poem.imageUrl ? (
-                      <div className="relative">
-                        <img
-                          src={poem.imageUrl}
-                          alt={poem.title}
-                          className="w-full h-48 object-cover rounded-lg"
-                        />
-                        {poem.content && (
-                          <div className="mt-3">
-                            <p className={`text-gray-300 text-sm whitespace-pre-line ${getFontClass(poem.font)}`}>
-                              {poem.content.length > 100 
-                                ? `${poem.content.substring(0, 100)}...` 
-                                : poem.content}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <p className={`text-gray-300 whitespace-pre-line ${getFontClass(poem.font)}`}>
-                        {poem.content.length > 200 
-                          ? `${poem.content.substring(0, 200)}...` 
-                          : poem.content}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Like Button */}
-                  <div className="flex items-center justify-between">
-                    <button
-                      onClick={() => handleLike(poem.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                        (poem.likes || []).includes(user?.uid || "")
-                          ? "bg-red-600 hover:bg-red-700 text-white"
-                          : "bg-neutral-800 hover:bg-neutral-700 text-gray-300"
-                      }`}
-                    >
-                      <Heart 
-                        className={`h-4 w-4 ${
-                          (poem.likes || []).includes(user?.uid || "") ? "fill-current" : ""
-                        }`} 
-                      />
-                      <span>{poem.likes?.length || 0}</span>
-                    </button>
-
-                    <div className="text-xs text-gray-500">
-                      Font: {poem.font}
-                    </div>
-                  </div>
-                </div>
-              </BackgroundGradient>
-            ))}
-          </div>
-
-          {/* No results message */}
-          {filteredPoems.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-gray-400 text-lg">
-                {searchTerm || fontFilter !== "all" 
-                  ? "No poems match your search criteria." 
-                  : "No new poems from others in the last 24 hours."}
-              </div>
-              <div className="text-gray-500 text-sm mt-2">
-                {searchTerm || fontFilter !== "all" 
-                  ? "Try adjusting your search or filters." 
-                  : "Check back later for fresh content from the community!"}
-              </div>
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 rounded-lg bg-red-900/50 border border-red-500 text-red-200 flex items-center justify-between">
+              <span>{error}</span>
               <button
-                onClick={() => router.push("/create")}
-                className="mt-6 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-semibold"
+                onClick={() => router.refresh()}
+                className="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors"
               >
-                Let's Get Writing
+                Retry
               </button>
             </div>
+          )}
+
+          {/* Initial Loading Skeletons */}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <PoemCardSkeleton key={idx} />
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Poems Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {poems.map((poem) => (
+                  <PoemFeedCard
+                    key={poem.id}
+                    poem={poem}
+                    userId={user.uid}
+                    onLike={handleLike}
+                  />
+                ))}
+              </div>
+
+              {/* Empty state */}
+              {poems.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="text-gray-400 text-lg">
+                    {debouncedSearch
+                      ? `No poems match "${debouncedSearch}"`
+                      : "No poems from others yet."}
+                  </div>
+                  <div className="text-gray-500 text-sm mt-2">
+                    {debouncedSearch
+                      ? "Try adjusting your search query or filters."
+                      : "Be the first to share a poem today!"}
+                  </div>
+                  {!debouncedSearch && (
+                    <button
+                      onClick={() => router.push("/create")}
+                      className="mt-6 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-semibold"
+                    >
+                      Let&apos;s Get Writing
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Infinite Scroll Sentinel & Loading More Skeletons */}
+              {hasMore && (
+                <div ref={sentinelRef} className="mt-8">
+                  {loadingMore && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {Array.from({ length: 3 }).map((_, idx) => (
+                        <PoemCardSkeleton key={`more-skeleton-${idx}`} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* End of Feed Message */}
+              {!hasMore && poems.length > 0 && (
+                <div className="text-center text-gray-500 text-sm py-12">
+                  You&apos;ve reached the end of the feed ✨
+                </div>
+              )}
+            </>
           )}
         </div>
       </Meteors>

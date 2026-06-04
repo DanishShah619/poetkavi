@@ -12,7 +12,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!loading && !isAuthenticated) {
       router.push('/signin'); 
     }
-  }, [loading, isAuthenticated]);
+  }, [loading, isAuthenticated, router]);
 
   if (loading) return null;
 

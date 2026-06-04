@@ -6,9 +6,9 @@ export type Poem = {
   content: string;
   font: string;
   imageUrl?: string | null;
-  likes: number;
-  
+  likes: string[];        // array of user UIDs — single schema across all files
   authorId: string;
-  authorEmail: string;
+  authorName: string;     // display name; read fallback: authorName || authorEmail
+  authorEmail: string;    // kept for legacy doc compatibility
   createdAt: Timestamp;
 };

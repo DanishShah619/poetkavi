@@ -3,106 +3,104 @@
 import Navbar from "@/components/ui/Navbar";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { getAuth, onAuthStateChanged, signOut, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { Meteors } from "@/components/ui/meteors";
 import { db } from "@/lib/firebase";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { BackgroundGradient } from "@/components/ui/background-gradient";
+import { useAuth } from "@/context/AuthContext";
+
+const TITLE_MAX = 120;
+const CONTENT_MAX = 5000;
 
 const CreatePage: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const { currentUser: user, loading, logOut } = useAuth();
   const router = useRouter();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [font, setFont] = useState("inter");
   const [image, setImage] = useState<File | null>(null);
-  const [imageUrl, setImageUrl] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Redirect unauthenticated users
   useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleLogout = async () => {
-    const auth = getAuth();
-    try {
-      await signOut(auth);
-      console.log("Signed out successfully");
+    if (!loading && !user) {
       router.push("/signin");
-    } catch (error) {
-      console.error("Logout failed:", error);
     }
-  };
+  }, [loading, user, router]);
 
-  const uploadImageToCloudinary = async () => {
+  const uploadImageToCloudinary = async (): Promise<string> => {
     if (!image) return "";
     const formData = new FormData();
     formData.append("file", image);
     formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_PRESET!);
 
     const res = await fetch(
-      "https://api.cloudinary.com/v1_1/" +
-        process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME +
-        "/image/upload",
-      {
-        method: "POST",
-        body: formData,
-      }
+      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+      { method: "POST", body: formData }
     );
     const data = await res.json();
-    return data.secure_url;
+
+    if (!res.ok) {
+      throw new Error(data.error?.message || "Image upload failed. Please try again.");
+    }
+    return data.secure_url as string;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !user) return;
+    setError(null);
 
-    // Enforce rule: only one of text or image
-    const isTextOnly = content.trim() !== "" && !image;
-    const isImageOnly = !content.trim() && image;
+    // Auth guard
+    if (!user) { router.push("/signin"); return; }
 
-    if (!isTextOnly && !isImageOnly) {
-      alert("Please provide either a poem text OR an image — not both.");
-      return;
-    }
+    // Validation
+    if (!title.trim()) { setError("Title is required."); return; }
+    if (title.trim().length > TITLE_MAX) { setError(`Title must be under ${TITLE_MAX} characters.`); return; }
 
-    setLoading(true);
+    const hasText = content.trim() !== "";
+    const hasImage = !!image;
+
+    if (!hasText && !hasImage) { setError("Please provide either a poem text or an image."); return; }
+    if (hasText && hasImage) { setError("Please provide either a poem text OR an image — not both."); return; }
+    if (hasText && content.length > CONTENT_MAX) { setError(`Poem must be under ${CONTENT_MAX} characters.`); return; }
+
+    setSubmitting(true);
 
     try {
-      const uploadedImageUrl = image ? await uploadImageToCloudinary() : null;
+      const uploadedImageUrl = hasImage ? await uploadImageToCloudinary() : null;
 
       await addDoc(collection(db, "poems"), {
-        title,
-        content: isTextOnly ? content.trim() : "",
+        title: title.trim(),
+        content: hasText ? content.trim() : "",
         font,
         imageUrl: uploadedImageUrl || null,
         createdAt: serverTimestamp(),
         authorId: user.uid,
+        // authorName for display; authorEmail retained for legacy read fallback
+        authorName: user.displayName || user.email?.split("@")[0] || "Poet",
         authorEmail: user.email,
         likes: [],
       });
 
-      setTitle("");
-      setContent("");
-      setImage(null);
-      setImageUrl("");
       router.push("/dashboard");
-    } catch (error) {
-      console.error("Error creating poem:", error);
+    } catch (err: unknown) {
+      console.error("Error creating poem:", err);
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
+  // Don't render form until auth is resolved
+  if (loading) return null;
+  if (!user) return null;
+
   return (
     <div className="relative min-h-screen w-full bg-black/[0.96] antialiased">
-      {/* Grid pattern background */}
+      {/* Grid background */}
       <div
         className={cn(
           "pointer-events-none absolute inset-0 z-0 [background-size:40px_40px] select-none",
@@ -110,16 +108,14 @@ const CreatePage: React.FC = () => {
         )}
       />
 
-      {/* Animated Meteors */}
       <Meteors number={25} className="w-full py-6">
         <Navbar
-          userEmail={user?.email || "user@example.com"}
-          userPhoto={user?.photoURL || ""}
-          onLogout={handleLogout}
+          userEmail={user.email || ""}
+          userPhoto={user.photoURL || ""}
+          onLogout={logOut}
         />
-        <div className="pt-10"></div>
+        <div className="pt-10" />
 
-        {/* Form container */}
         <div className="w-full max-w-xl mx-auto pt-8 px-4">
           <BackgroundGradient className="w-full rounded-2xl p-[1px]">
             <div className="w-full rounded-2xl bg-neutral-900 px-5 py-6 space-y-5 border border-white/10">
@@ -127,23 +123,36 @@ const CreatePage: React.FC = () => {
                 Create a New Poem
               </h1>
 
+              {error && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm">
+                  {error}
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="w-full space-y-5">
+                {/* Title */}
                 <div>
-                  <label className="block text-lg mb-1 text-white">Title</label>
+                  <label className="block text-lg mb-1 text-white">
+                    Title{" "}
+                    <span className="text-sm text-neutral-400">
+                      ({title.length}/{TITLE_MAX})
+                    </span>
+                  </label>
                   <input
                     type="text"
                     value={title}
+                    maxLength={TITLE_MAX}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full px-3 py-2 rounded bg-neutral-800 text-white border border-neutral-700"
+                    className="w-full px-3 py-2 rounded bg-neutral-800 text-white border border-neutral-700 focus:border-indigo-500 focus:outline-none"
                     placeholder="Enter poem title"
                     required
                   />
                 </div>
 
+                {/* Font */}
                 <div>
                   <label className="block text-lg text-white mb-1">Font</label>
                   <select
-                  title="b"
                     value={font}
                     onChange={(e) => setFont(e.target.value)}
                     className="w-full px-3 py-2 rounded bg-neutral-800 text-white border border-neutral-700"
@@ -158,23 +167,32 @@ const CreatePage: React.FC = () => {
                   </select>
                 </div>
 
+                {/* Poem text */}
                 <div>
-                  <label className="block text-lg text-white mb-1">Poem</label>
+                  <label className="block text-lg text-white mb-1">
+                    Poem{" "}
+                    <span className="text-sm text-neutral-400">
+                      ({content.length}/{CONTENT_MAX})
+                    </span>
+                  </label>
                   <textarea
                     value={content}
+                    maxLength={CONTENT_MAX}
                     onChange={(e) => setContent(e.target.value)}
-                    rows={3}
-                    className={`w-full px-3 py-2 rounded bg-neutral-800 text-white border border-neutral-700 font-${font}`}
+                    rows={6}
+                    className={`w-full px-3 py-2 rounded bg-neutral-800 text-white border border-neutral-700 font-${font} focus:border-indigo-500 focus:outline-none`}
                     placeholder="Write your poem here..."
                   />
                 </div>
 
+                {/* Image */}
                 <div>
-                  <label className="block text-lg text-white mb-1">Image (optional)</label>
+                  <label className="block text-lg text-white mb-1">
+                    Image <span className="text-neutral-400 text-sm">(optional — provide image OR text, not both)</span>
+                  </label>
                   <input
-                  title="d"
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     onChange={(e) => setImage(e.target.files?.[0] || null)}
                     className="block text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                   />
@@ -182,19 +200,19 @@ const CreatePage: React.FC = () => {
 
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full py-2 px-4 rounded bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold"
+                  disabled={submitting}
+                  className="w-full py-2 px-4 rounded bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold transition-colors"
                 >
-                  {loading ? "Uploading..." : "Post Poem"}
+                  {submitting ? "Uploading..." : "Post Poem"}
                 </button>
               </form>
 
               {/* Preview */}
               <div className="mt-6 w-full border-t border-neutral-700 pt-4">
                 <h2 className="text-lg font-bold text-white mb-2">Preview</h2>
-                <div className={`text-xl font-${font} whitespace-pre-line`}>
-                  <h3 className="text-2xl mb-2">{title}</h3>
-                  <p>{content}</p>
+                <div className={`text-xl whitespace-pre-line font-${font}`}>
+                  <h3 className="text-2xl mb-2 text-white">{title}</h3>
+                  <p className="text-neutral-300">{content}</p>
                   {image && (
                     <p className="mt-4 text-sm italic text-gray-400">
                       (Image selected: {image.name})
@@ -211,4 +229,3 @@ const CreatePage: React.FC = () => {
 };
 
 export default CreatePage;
-

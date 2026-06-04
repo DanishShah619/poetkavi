@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { BarChart3, Plus, Compass, Home } from 'lucide-react';
+import Image from 'next/image';
 
 interface NavbarProps {
   userEmail?: string;
@@ -122,9 +123,11 @@ const Navbar: React.FC<NavbarProps> = ({
             className="cursor-pointer"
           >
             {userPhoto ? (
-              <img
+              <Image
                 src={userPhoto}
                 alt="avatar"
+                width={40}
+                height={40}
                 className="w-10 h-10 rounded-full ring-2 ring-white/20 object-cover"
               />
             ) : (
