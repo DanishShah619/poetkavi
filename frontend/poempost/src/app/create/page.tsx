@@ -9,6 +9,8 @@ import { db } from "@/lib/firebase";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { BackgroundGradient } from "@/components/ui/background-gradient";
 import { useAuth } from "@/context/AuthContext";
+import { AIAssistDialog } from "@/components/AIAssistDialog";
+import { Wand2 } from "lucide-react";
 
 const TITLE_MAX = 120;
 const CONTENT_MAX = 5000;
@@ -17,12 +19,13 @@ const CreatePage: React.FC = () => {
   const { currentUser: user, loading, logOut } = useAuth();
   const router = useRouter();
 
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [font, setFont] = useState("inter");
-  const [image, setImage] = useState<File | null>(null);
+  const [title, setTitle]         = useState("");
+  const [content, setContent]     = useState("");
+  const [font, setFont]           = useState("inter");
+  const [image, setImage]         = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]         = useState<string | null>(null);
+  const [showAIDialog, setShowAIDialog] = useState(false);
 
   // Redirect unauthenticated users
   useEffect(() => {
@@ -169,19 +172,31 @@ const CreatePage: React.FC = () => {
 
                 {/* Poem text */}
                 <div>
-                  <label className="block text-lg text-white mb-1">
-                    Poem{" "}
-                    <span className="text-sm text-neutral-400">
-                      ({content.length}/{CONTENT_MAX})
-                    </span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-lg text-white">
+                      Poem{" "}
+                      <span className="text-sm text-neutral-400">
+                        ({content.length}/{CONTENT_MAX})
+                      </span>
+                    </label>
+
+                    {/* ✨ AI Assist button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowAIDialog(true)}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 hover:border-indigo-500/60 text-indigo-300 hover:text-white transition-all duration-200"
+                    >
+                      <Wand2 className="w-3.5 h-3.5" />
+                      AI Assist
+                    </button>
+                  </div>
                   <textarea
                     value={content}
                     maxLength={CONTENT_MAX}
                     onChange={(e) => setContent(e.target.value)}
                     rows={6}
                     className={`w-full px-3 py-2 rounded bg-neutral-800 text-white border border-neutral-700 font-${font} focus:border-indigo-500 focus:outline-none`}
-                    placeholder="Write your poem here..."
+                    placeholder="Write your poem here…"
                   />
                 </div>
 
@@ -224,6 +239,14 @@ const CreatePage: React.FC = () => {
           </BackgroundGradient>
         </div>
       </Meteors>
+      {/* AI Assist Dialog */}
+      <AIAssistDialog
+        open={showAIDialog}
+        onClose={() => setShowAIDialog(false)}
+        poemContent={content}
+        userId={user.uid}
+        onAccept={(suggestion) => setContent(suggestion)}
+      />
     </div>
   );
 };
