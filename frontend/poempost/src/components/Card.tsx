@@ -129,7 +129,7 @@ export function CardDemo() {
             height={100}
             width={100}
             alt="Avatar"
-            src={user?.photoURL || getGeneratedAvatar()}
+            src={profile?.profilePic || user?.photoURL || getGeneratedAvatar()}
             className="h-10 w-10 rounded-full border-2 object-cover"
           />
           <div className="flex flex-col">
