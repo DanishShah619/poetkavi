@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, X, RefreshCw, CheckCheck, Wand2, AlertCircle } from "lucide-react";
+import { Sparkles, X, RefreshCw, CheckCheck, Wand2, AlertCircle, PlusCircle } from "lucide-react";
+import { auth } from "@/lib/firebase";
 
 // ---------------------------------------------------------------------------
 // Keyword definitions
@@ -35,8 +36,9 @@ interface AIAssistDialogProps {
   open: boolean;
   onClose: () => void;
   poemContent: string;
-  userId: string;
-  onAccept: (suggestion: string) => void;
+  /** userId is no longer needed on the client — token is sent via Authorization header */
+  userId?: string;
+  onAccept: (suggestion: string, mode: "replace" | "append") => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +89,6 @@ export function AIAssistDialog({
   open,
   onClose,
   poemContent,
-  userId,
   onAccept,
 }: AIAssistDialogProps) {
   const [selected, setSelected]       = useState<string[]>([]);
@@ -95,6 +96,7 @@ export function AIAssistDialog({
   const [suggestion, setSuggestion]   = useState<string | null>(null);
   const [error, setError]             = useState<string | null>(null);
   const [remaining, setRemaining]     = useState<number | null>(null);
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
 
   const toggleKeyword = (id: string) => {
     setSelected((prev) => {
@@ -109,6 +111,7 @@ export function AIAssistDialog({
     setLoading(true);
     setError(null);
     setSuggestion(null);
+    setConfirmOverwrite(false);
 
     const labelMap = [...MOOD_KEYWORDS, ...STYLE_KEYWORDS].reduce<Record<string, string>>(
       (acc, k) => { acc[k.id] = k.label; return acc; },
@@ -117,10 +120,21 @@ export function AIAssistDialog({
     const keywordLabels = selected.map((id) => labelMap[id]);
 
     try {
+      // Fetch a fresh Firebase ID token — verified server-side, userId never sent in body
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setError("You must be signed in to use AI Assist.");
+        return;
+      }
+      const idToken = await currentUser.getIdToken();
+
       const res = await fetch("/api/ai-assist", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ poemContent, keywords: keywordLabels, userId }),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ poemContent, keywords: keywordLabels }),
       });
 
       const data = await res.json() as { suggestion?: string; remaining?: number; error?: string };
@@ -139,9 +153,22 @@ export function AIAssistDialog({
     }
   };
 
-  const handleAccept = () => {
+  /** Called when user clicks "Use This Poem" */
+  const handleAcceptClick = () => {
+    if (!suggestion) return;
+    // If the user already has content, require them to choose replace vs. append
+    if (poemContent.trim()) {
+      setConfirmOverwrite(true);
+    } else {
+      // No existing content — safe to replace directly
+      onAccept(suggestion, "replace");
+      handleClose();
+    }
+  };
+
+  const handleConfirm = (mode: "replace" | "append") => {
     if (suggestion) {
-      onAccept(suggestion);
+      onAccept(suggestion, mode);
       handleClose();
     }
   };
@@ -152,6 +179,7 @@ export function AIAssistDialog({
     setSuggestion(null);
     setError(null);
     setLoading(false);
+    setConfirmOverwrite(false);
     onClose();
   };
 
@@ -293,9 +321,42 @@ export function AIAssistDialog({
             </div>
 
             {/* ── Footer actions ── */}
-            <div className="shrink-0 px-5 py-4 border-t border-neutral-800 bg-neutral-950/60 flex items-center gap-3">
-              {suggestion ? (
-                <>
+            <div className="shrink-0 px-5 py-4 border-t border-neutral-800 bg-neutral-950/60">
+              {/* Overwrite confirmation — shown after user clicks "Use This Poem" */}
+              {confirmOverwrite ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-2"
+                >
+                  <p className="text-xs text-amber-400 text-center font-semibold mb-2">
+                    ⚠️ You have existing poem content. What would you like to do?
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleConfirm("append")}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold bg-emerald-700 hover:bg-emerald-600 text-white transition-colors"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      Append Below
+                    </button>
+                    <button
+                      onClick={() => handleConfirm("replace")}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold bg-red-700 hover:bg-red-600 text-white transition-colors"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      Replace All
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setConfirmOverwrite(false)}
+                    className="w-full py-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </motion.div>
+              ) : suggestion ? (
+                <div className="flex items-center gap-3">
                   <button
                     onClick={handleGenerate}
                     disabled={loading || !selected.length}
@@ -305,13 +366,13 @@ export function AIAssistDialog({
                     Regenerate
                   </button>
                   <button
-                    onClick={handleAccept}
+                    onClick={handleAcceptClick}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors shadow-lg shadow-indigo-500/20"
                   >
                     <CheckCheck className="w-3.5 h-3.5" />
                     Use This Poem
                   </button>
-                </>
+                </div>
               ) : (
                 <button
                   onClick={handleGenerate}

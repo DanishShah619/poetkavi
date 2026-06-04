@@ -55,8 +55,9 @@ const PAGE_SIZE = 12;
 /**
  * How many docs to pull for client-side search.
  * NOTE: For production scale, replace the search path with Algolia / Typesense.
+ * Kept at 30 (half the original 60) to limit per-keystroke Firestore read costs.
  */
-const SEARCH_BATCH = 60;
+const SEARCH_BATCH = 30;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -193,6 +194,8 @@ export function useInfiniteFeed({
       try {
         const q = query(
           collection(db, "poems"),
+          where("authorId", "!=", userId), // exclude caller's own poems server-side
+          orderBy("authorId"),              // required by Firestore when using != inequality
           orderBy("createdAt", "desc"),
           limit(SEARCH_BATCH)
         );
@@ -207,8 +210,6 @@ export function useInfiniteFeed({
               likes: Array.isArray(data.likes) ? data.likes : [],
             };
           })
-          // exclude own poems
-          .filter((p) => p.authorId !== userId)
           // text match
           .filter((p) => matchesSearch(p, term))
           // font filter

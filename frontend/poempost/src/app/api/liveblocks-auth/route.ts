@@ -2,9 +2,18 @@ import { NextResponse } from "next/server";
 import { Liveblocks } from "@liveblocks/node";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 
-const liveblocks = new Liveblocks({
-  secret: process.env.LIVEBLOCKS_SECRET_KEY || "sk_prod_placeholder_key",
-});
+let liveblocksInstance: Liveblocks | null = null;
+function getLiveblocks() {
+  if (liveblocksInstance) return liveblocksInstance;
+  const secret = process.env.LIVEBLOCKS_SECRET_KEY;
+  if (!secret) {
+    throw new Error(
+      "LIVEBLOCKS_SECRET_KEY is not set. Refusing to start with an insecure placeholder."
+    );
+  }
+  liveblocksInstance = new Liveblocks({ secret });
+  return liveblocksInstance;
+}
 
 export async function POST(request: Request) {
   // 1. Get user session token from authorization header
@@ -56,6 +65,7 @@ export async function POST(request: Request) {
       (poemData?.allowedViewersEmails && Array.isArray(poemData.allowedViewersEmails) && decodedToken.email && poemData.allowedViewersEmails.includes(decodedToken.email));
 
     // 5. Start secure Liveblocks session with specific user details
+    const liveblocks = getLiveblocks();
     const session = liveblocks.prepareSession(userId, {
       userInfo: {
         name: decodedToken.name || decodedToken.email?.split("@")[0] || "Anonymous",

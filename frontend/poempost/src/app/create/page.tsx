@@ -244,8 +244,13 @@ const CreatePage: React.FC = () => {
         open={showAIDialog}
         onClose={() => setShowAIDialog(false)}
         poemContent={content}
-        userId={user.uid}
-        onAccept={(suggestion) => setContent(suggestion)}
+        onAccept={(suggestion, mode) => {
+          if (mode === "append") {
+            setContent((prev) => prev ? `${prev}\n\n---\n\n${suggestion}` : suggestion);
+          } else {
+            setContent(suggestion);
+          }
+        }}
       />
     </div>
   );

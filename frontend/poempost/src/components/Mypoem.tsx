@@ -8,7 +8,6 @@ import {
   query,
   where,
   orderBy,
-  getDocs,
   doc,
   updateDoc,
   arrayUnion,
@@ -27,7 +26,7 @@ import { format } from "date-fns";
 import { TextGenerateEffect } from "./ui/text-generate-effect";
 import { MessageCircle, Send, X, Users, Maximize2, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const randomX = () => Math.floor(Math.random() * 60) + 10;
 const randomY = () => Math.floor(Math.random() * 40) + 10;
@@ -62,6 +61,11 @@ export default function MyPoems() {
   const [loadingComment, setLoadingComment] = useState(false);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const { currentUser: user } = useAuth();
+  const router = useRouter();
+
+  // Track whether a drag is currently in progress so the collaborate button
+  // click handler can bail out if mouseup fires at the end of a drag
+  const isDragging = useRef(false);
 
   const positions = useRef<Record<string, { x: number; y: number; angle: number }>>({});
 
@@ -72,54 +76,26 @@ export default function MyPoems() {
     return positions.current[id];
   };
 
-  const fetchCommentCounts = async (poemIds: string[]) => {
-    if (poemIds.length === 0) return;
-    const counts: Record<string, number> = {};
-    poemIds.forEach((id) => {
-      counts[id] = 0;
-    });
-
-    const chunks: string[][] = [];
-    for (let i = 0; i < poemIds.length; i += 30) {
-      chunks.push(poemIds.slice(i, i + 30));
-    }
-
-    try {
-      for (const chunk of chunks) {
-        const q = query(
-          collection(db, "comments"),
-          where("poemId", "in", chunk)
-        );
-        const snap = await getDocs(q);
-        snap.docs.forEach((doc) => {
-          const data = doc.data();
-          if (data.poemId) {
-            counts[data.poemId] = (counts[data.poemId] || 0) + 1;
-          }
-        });
-      }
-      setCommentCounts(counts);
-    } catch (err) {
-      console.error("Error fetching comment counts:", err);
-    }
-  };
-
+  // ── Fix #7: Real-time poems listener (uses Firestore cache on re-visits) ──
+  // ── Fix #8: Live comment counts via onSnapshot — no chunked getDocs calls ──
   useEffect(() => {
-    const fetchPoems = async () => {
-      if (!user) return;
+    if (!user) return;
 
-      const q = query(
-        collection(db, "poems"),
-        where("authorId", "==", user.uid),
-        orderBy("createdAt", "desc")
-      );
+    const poemsQuery = query(
+      collection(db, "poems"),
+      where("authorId", "==", user.uid),
+      orderBy("createdAt", "desc")
+    );
 
-      const snap = await getDocs(q);
+    // Track comment-count unsubscribers so we can clean them up when poems change
+    let commentUnsubs: (() => void)[] = [];
+
+    const unsubPoems = onSnapshot(poemsQuery, (snap) => {
       const data = snap.docs
-        .map((doc) => {
-          const docData = doc.data();
+        .map((docSnap) => {
+          const docData = docSnap.data();
           return {
-            id: doc.id,
+            id: docSnap.id,
             ...docData,
             likes: Array.isArray(docData.likes) ? docData.likes : [],
           } as Poem;
@@ -131,10 +107,49 @@ export default function MyPoems() {
         );
 
       setPoems(data);
-      fetchCommentCounts(data.map((p) => p.id));
-    };
 
-    fetchPoems();
+      // Tear down old comment listeners before setting up new ones
+      commentUnsubs.forEach((u) => u());
+      commentUnsubs = [];
+
+      const ids = data.map((p) => p.id);
+      if (ids.length === 0) {
+        setCommentCounts({});
+        return;
+      }
+
+      // Initialise all counts to 0 so cards render immediately
+      const base: Record<string, number> = {};
+      ids.forEach((id) => { base[id] = 0; });
+      setCommentCounts(base);
+
+      // Subscribe per chunk of 30 (Firestore "in" limit)
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += 30) {
+        chunks.push(ids.slice(i, i + 30));
+      }
+
+      chunks.forEach((chunk) => {
+        const unsub = onSnapshot(
+          query(collection(db, "comments"), where("poemId", "in", chunk)),
+          (cSnap) => {
+            const chunkCounts: Record<string, number> = {};
+            chunk.forEach((id) => { chunkCounts[id] = 0; });
+            cSnap.docs.forEach((d) => {
+              const poemId = d.data().poemId as string;
+              if (poemId) chunkCounts[poemId] = (chunkCounts[poemId] ?? 0) + 1;
+            });
+            setCommentCounts((prev) => ({ ...prev, ...chunkCounts }));
+          }
+        );
+        commentUnsubs.push(unsub);
+      });
+    });
+
+    return () => {
+      unsubPoems();
+      commentUnsubs.forEach((u) => u());
+    };
   }, [user]);
 
   useEffect(() => {
@@ -448,18 +463,26 @@ export default function MyPoems() {
                       <span>{commentCounts[poem.id] ?? 0}</span>
                     </motion.button>
 
-                    {/* Collaborate Button */}
-                    <Link href={`/collaborate/${poem.id}`}>
-                      <motion.button
-                        whileTap={{ scale: 1.1 }}
-                        whileHover={{ scale: 1.05 }}
-                        className="flex items-center space-x-1 text-gray-400 hover:text-indigo-500 transition-colors duration-150 cursor-pointer"
-                        title="Collaborate Live"
-                      >
-                        <Users className="w-4 h-4" />
-                        <span className="text-xs">Collaborate</span>
-                      </motion.button>
-                    </Link>
+                    {/* Collaborate Button — uses router.push guarded by isDragging ref
+                         so drag-end mouseup events don't trigger navigation */}
+                    <motion.button
+                      whileTap={{ scale: 1.1 }}
+                      whileHover={{ scale: 1.05 }}
+                      onPointerDown={() => { isDragging.current = false; }}
+                      onPointerMove={() => { isDragging.current = true; }}
+                      onClick={() => {
+                        if (isDragging.current) {
+                          isDragging.current = false;
+                          return;
+                        }
+                        router.push(`/collaborate/${poem.id}`);
+                      }}
+                      className="flex items-center space-x-1 text-gray-400 hover:text-indigo-500 transition-colors duration-150 cursor-pointer"
+                      title="Collaborate Live"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span className="text-xs">Collaborate</span>
+                    </motion.button>
                   </div>
                 </div>
               </div>

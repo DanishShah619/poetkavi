@@ -143,17 +143,45 @@ const ExplorePage: React.FC = () => {
           </div>
 
           {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-4 rounded-lg bg-red-900/50 border border-red-500 text-red-200 flex items-center justify-between">
-              <span>{error}</span>
-              <button
-                onClick={() => router.refresh()}
-                className="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          )}
+          {error && (() => {
+            const isMissingIndex =
+              error.toLowerCase().includes("requires an index") ||
+              error.toLowerCase().includes("failed to load poems");
+            return (
+              <div className="mb-6 p-4 rounded-lg bg-red-900/50 border border-red-500 text-red-200 space-y-2">
+                <p className="font-semibold text-sm">
+                  {isMissingIndex
+                    ? "⚠️ A Firestore composite index is missing."
+                    : error}
+                </p>
+                {isMissingIndex && (
+                  <>
+                    <p className="text-xs text-red-300">
+                      The explore feed requires a composite index on{" "}
+                      <code className="bg-red-950/60 px-1 rounded">poems</code> for{" "}
+                      <code className="bg-red-950/60 px-1 rounded">authorId (!=)</code> +{" "}
+                      <code className="bg-red-950/60 px-1 rounded">createdAt (desc)</code>.
+                      Check your browser console for a direct link to create it in the Firebase Console.
+                    </p>
+                    <button
+                      onClick={() => router.refresh()}
+                      className="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors"
+                    >
+                      Retry after creating the index
+                    </button>
+                  </>
+                )}
+                {!isMissingIndex && (
+                  <button
+                    onClick={() => router.refresh()}
+                    className="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Initial Loading Skeletons */}
           {loading ? (

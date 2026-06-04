@@ -45,28 +45,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Result is picked up automatically by onAuthStateChanged below
   }, []);
 
-  // Single auth state listener — source of truth for the whole app
+  // Auth listener — subscribe once for the entire app lifetime.
+  // Do NOT include router or pathname here; doing so causes Firebase to tear
+  // down and rebuild its WebSocket on every route change.
   useEffect(() => {
     let mounted = true;
 
     const unsubscribe = onAuthStateChange((user) => {
       if (!mounted) return;
-
       setCurrentUser(user);
       setLoading(false);
-
-      // Only redirect to dashboard if the user is on an auth-only page
-      // This prevents trapping the user on /dashboard when navigating to /explore etc.
-      if (user && AUTH_ONLY_PATHS.includes(pathname)) {
-        router.push('/dashboard');
-      }
     });
 
     return () => {
       mounted = false;
       unsubscribe();
     };
-  }, [router, pathname]);
+  }, []); // ← intentionally empty — subscribe once
+
+  // Redirect logic — runs reactively when auth state or route changes.
+  // Kept separate so the listener above is never re-registered.
+  useEffect(() => {
+    if (!loading && currentUser && AUTH_ONLY_PATHS.includes(pathname)) {
+      router.push('/dashboard');
+    }
+  }, [loading, currentUser, pathname, router]);
 
   const signUp = async (
     email: string,

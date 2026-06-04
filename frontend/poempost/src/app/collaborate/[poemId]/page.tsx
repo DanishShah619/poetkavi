@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useState, use, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
@@ -121,8 +121,10 @@ export default function CollaboratePage({ params }: PageProps) {
     return () => unsubscribe();
   }, [user, poemId]);
 
-  // Handle autosave checkpoint write
-  const handleSaveCheckpoint = async (htmlContent: string) => {
+  // Handle autosave checkpoint write — memoised so CollaborativeEditor's
+  // useEffect dep array stays stable and the debounce timer isn't reset on
+  // every parent render.
+  const handleSaveCheckpoint = useCallback(async (htmlContent: string) => {
     if (!poemId) return;
     try {
       const docRef = doc(db, "poems", poemId);
@@ -132,7 +134,7 @@ export default function CollaboratePage({ params }: PageProps) {
     } catch (err) {
       console.error("Error saving checkpoint to Firestore:", err);
     }
-  };
+  }, [poemId]);
 
   // Handle invitation
   const handleInvite = async (e: React.FormEvent) => {

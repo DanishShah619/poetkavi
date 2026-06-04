@@ -89,9 +89,13 @@ export default function ForgotPasswordPage() {
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-300 text-sm"
+                  className="mb-4 p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-green-300 text-sm space-y-1"
                 >
-                  {success}
+                  <p className="font-semibold">✅ {success}</p>
+                  <p className="text-green-400/70 text-xs">
+                    Check your inbox (and spam folder). The reset link expires in 1 hour.
+                    You may close this page.
+                  </p>
                 </motion.div>
               )}
 
