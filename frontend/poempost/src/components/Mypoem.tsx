@@ -25,8 +25,9 @@ import {
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { TextGenerateEffect } from "./ui/text-generate-effect";
-import { MessageCircle, Send, X } from "lucide-react";
+import { MessageCircle, Send, X, Users, Maximize2, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 const randomX = () => Math.floor(Math.random() * 60) + 10;
 const randomY = () => Math.floor(Math.random() * 40) + 10;
@@ -50,9 +51,12 @@ interface Poem {
   likes: string[];
 }
 
+const PREVIEW_LIMIT = 120;
+
 export default function MyPoems() {
   const [poems, setPoems] = useState<Poem[]>([]);
   const [showComments, setShowComments] = useState<string | null>(null);
+  const [selectedPoem, setSelectedPoem] = useState<Poem | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [loadingComment, setLoadingComment] = useState(false);
@@ -275,6 +279,73 @@ export default function MyPoems() {
         </div>
       )}
 
+      {/* ── Full-screen Poem Reader Modal ── */}
+      {selectedPoem && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setSelectedPoem(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 20 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            onClick={(e) => e.stopPropagation()}
+            className="relative bg-[#0f0f0f] border border-neutral-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 shrink-0">
+              <h2 className="text-xl font-bold text-white tracking-tight truncate pr-4">
+                {selectedPoem.title}
+              </h2>
+              <button
+                onClick={() => setSelectedPoem(null)}
+                className="text-neutral-500 hover:text-white transition-colors rounded-full p-1 hover:bg-neutral-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body — scrollable */}
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              {selectedPoem.imageUrl && (
+                <Image
+                  src={selectedPoem.imageUrl}
+                  alt={selectedPoem.title ?? "Poem"}
+                  width={640}
+                  height={400}
+                  className="w-full max-h-80 object-contain rounded-lg mb-6 border border-neutral-800"
+                />
+              )}
+              {selectedPoem.content && (
+                <pre className="whitespace-pre-wrap font-serif text-base text-neutral-200 leading-8 text-center">
+                  {selectedPoem.content}
+                </pre>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between px-6 py-3 border-t border-neutral-800 shrink-0 bg-neutral-950/60">
+              <span className="text-xs text-neutral-500">
+                {selectedPoem.createdAt && typeof selectedPoem.createdAt.seconds === "number"
+                  ? format(new Date(selectedPoem.createdAt.seconds * 1000), "dd MMM yyyy")
+                  : ""}
+              </span>
+              <div className="flex items-center gap-4">
+                <span className="flex items-center gap-1 text-xs text-neutral-400">
+                  <Heart className="w-3.5 h-3.5 text-red-400" />
+                  {selectedPoem.likes?.length ?? 0} likes
+                </span>
+                <span className="flex items-center gap-1 text-xs text-neutral-400">
+                  <MessageCircle className="w-3.5 h-3.5 text-blue-400" />
+                  {commentCounts[selectedPoem.id] ?? 0} comments
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <DraggableCardContainer className="relative w-full h-screen overflow-clip">
         {poems.map((poem) => {
           const isLiked = user?.uid ? (poem.likes ?? []).includes(user.uid) : false;
@@ -291,37 +362,54 @@ export default function MyPoems() {
               }}
             >
               <div
-                className={cn(
-                  "bg-white shadow-lg rounded-md p-3 pb-4 w-80",
-                  !poem.content && poem.imageUrl
-                    ? "min-h-[360px]"
-                    : "min-h-[250px]"
-                )}
+                className="bg-white shadow-lg rounded-md p-3 pb-4 w-80 h-72 flex flex-col overflow-hidden"
               >
-                {/* Title */}
-                <div className="mb-3">
-                  <h3 className="text-lg font-bold text-gray-800 text-center border-b pb-2">
+                {/* Title + Expand hint */}
+                <div className="mb-2 flex items-start justify-between gap-1">
+                  <h3 className="text-base font-bold text-gray-800 border-b pb-1 flex-1 line-clamp-1">
                     {poem.title}
                   </h3>
+                  <button
+                    onClick={() => setSelectedPoem(poem)}
+                    className="shrink-0 text-gray-400 hover:text-indigo-600 transition-colors p-0.5"
+                    title="Read full poem"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
-                {/* Image */}
-                {poem.imageUrl && (
-                  <Image
-                    src={poem.imageUrl}
-                    alt="Poem"
-                    width={320}
-                    height={208}
-                    className="w-full h-52 object-contain rounded mb-3"
-                  />
-                )}
+                {/* Clickable preview area */}
+                <div
+                  className="flex-1 overflow-hidden cursor-pointer group"
+                  onClick={() => setSelectedPoem(poem)}
+                >
+                  {/* Image preview */}
+                  {poem.imageUrl && (
+                    <Image
+                      src={poem.imageUrl}
+                      alt="Poem"
+                      width={320}
+                      height={160}
+                      className="w-full h-40 object-cover rounded mb-2 group-hover:opacity-90 transition-opacity"
+                    />
+                  )}
 
-                {/* Text Content */}
-                {poem.content && (
-                  <pre className="whitespace-pre-wrap font-serif text-sm text-center mb-3">
-                    {poem.content}
-                  </pre>
-                )}
+                  {/* Text preview — truncated */}
+                  {poem.content && (
+                    <pre className="whitespace-pre-wrap font-serif text-xs text-gray-700 text-center leading-relaxed line-clamp-4">
+                      {poem.content.length > PREVIEW_LIMIT
+                        ? poem.content.slice(0, PREVIEW_LIMIT) + "…"
+                        : poem.content}
+                    </pre>
+                  )}
+
+                  {/* Read more hint */}
+                  {(poem.content?.length ?? 0) > PREVIEW_LIMIT && (
+                    <p className="text-[10px] text-indigo-400 text-center mt-1 group-hover:text-indigo-600 transition-colors">
+                      Click to read full poem
+                    </p>
+                  )}
+                </div>
 
                 {/* Footer: Date, Likes, Comments */}
                 <div className="flex flex-col items-start mt-3 px-2 text-sm text-gray-600 space-y-2">
@@ -359,6 +447,19 @@ export default function MyPoems() {
                       <MessageCircle className="w-4 h-4" />
                       <span>{commentCounts[poem.id] ?? 0}</span>
                     </motion.button>
+
+                    {/* Collaborate Button */}
+                    <Link href={`/collaborate/${poem.id}`}>
+                      <motion.button
+                        whileTap={{ scale: 1.1 }}
+                        whileHover={{ scale: 1.05 }}
+                        className="flex items-center space-x-1 text-gray-400 hover:text-indigo-500 transition-colors duration-150 cursor-pointer"
+                        title="Collaborate Live"
+                      >
+                        <Users className="w-4 h-4" />
+                        <span className="text-xs">Collaborate</span>
+                      </motion.button>
+                    </Link>
                   </div>
                 </div>
               </div>

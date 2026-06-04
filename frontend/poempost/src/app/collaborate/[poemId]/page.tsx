@@ -18,7 +18,9 @@ import {
   BookOpen, 
   Edit, 
   ArrowLeft,
-  CircleDot
+  CircleDot,
+  Link2,
+  CheckCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +63,16 @@ export default function CollaboratePage({ params }: PageProps) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = typeof window !== "undefined" ? window.location.href : `https://yourapp.com/collaborate/${poemId}`;
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
 
   // Redirect unauthenticated users
   useEffect(() => {
@@ -340,6 +352,31 @@ export default function CollaboratePage({ params }: PageProps) {
                       <Plus className="w-3.5 h-3.5" /> Invite User
                     </button>
                   </form>
+
+                  {/* Share Link — send this to invited collaborators */}
+                  <div className="pt-3 border-t border-neutral-800 space-y-2">
+                    <p className="text-xs text-neutral-400">
+                      After inviting, share this link with your collaborator:
+                    </p>
+                    <div className="flex items-center gap-2 bg-neutral-950 rounded border border-neutral-800 p-2">
+                      <span className="text-[10px] text-neutral-300 truncate flex-1">{shareUrl}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                          copied
+                            ? "bg-emerald-600 text-white"
+                            : "bg-neutral-700 hover:bg-indigo-600 text-neutral-200"
+                        }`}
+                      >
+                        {copied ? (
+                          <><CheckCheck className="w-3 h-3" /> Copied!</>
+                        ) : (
+                          <><Link2 className="w-3 h-3" /> Copy</>
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
                   {/* List of current invitees */}
                   <div className="pt-2 border-t border-neutral-800 space-y-3">
