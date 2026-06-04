@@ -15,7 +15,7 @@ type FeaturedPoem = {
   imageUrl?: string | null;
 };
 
-const FEATURED_AUTHOR_NAME = "shanildanshah";
+const FEATURED_AUTHOR_NAME = "Danish Shanil Shah (47)";
 const FEATURED_POEM_LIMIT = 3;
 const OWNER_NAME = "Danish Shah";
 const OWNER_EMAIL = "shanildanshah@gmail.com";

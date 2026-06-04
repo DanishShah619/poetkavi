@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   collection,
-  doc,
   DocumentSnapshot,
   DocumentData,
   getDocs,
@@ -10,12 +9,10 @@ import {
   query,
   startAfter,
   Timestamp,
-  updateDoc,
-  arrayUnion,
-  arrayRemove,
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -256,7 +253,6 @@ export function useInfiniteFeed({
       if (!poem) return;
 
       const isLiked = poem.likes.includes(userId);
-      const poemRef = doc(db, "poems", poemId);
 
       // Optimistic update
       setPoems((prev) =>
@@ -273,9 +269,31 @@ export function useInfiniteFeed({
       );
 
       try {
-        await updateDoc(poemRef, {
-          likes: isLiked ? arrayRemove(userId) : arrayUnion(userId),
+        const token = await auth.currentUser?.getIdToken();
+
+        if (!token) {
+          throw new Error("You must be signed in to like poems.");
+        }
+
+        const response = await fetch(`/api/poems/${poemId}/like`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
+
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error || "Failed to update like.");
+        }
+
+        const data = (await response.json()) as { likes?: string[] };
+
+        if (Array.isArray(data.likes)) {
+          setPoems((prev) =>
+            prev.map((p) => (p.id === poemId ? { ...p, likes: data.likes ?? [] } : p))
+          );
+        }
       } catch (err) {
         console.error("[useInfiniteFeed] like error:", err);
         // Revert on failure

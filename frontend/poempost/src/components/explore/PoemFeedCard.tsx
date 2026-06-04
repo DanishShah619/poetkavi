@@ -3,7 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { motion } from "motion/react";
-import { Heart, Calendar, User as UserIcon } from "lucide-react";
+import { Heart, Calendar, Maximize2, User as UserIcon } from "lucide-react";
 import { BackgroundGradient } from "@/components/ui/background-gradient";
 import { Poem } from "@/hooks/useInfiniteFeed";
 
@@ -11,6 +11,7 @@ interface PoemFeedCardProps {
   poem: Poem;
   userId: string;
   onLike: (poemId: string) => void;
+  onOpen: (poem: Poem) => void;
 }
 
 const getAuthorDisplay = (poem: Poem): string =>
@@ -38,8 +39,9 @@ const getFontClass = (font: string) => {
   return map[font] ?? "font-inter";
 };
 
-export function PoemFeedCard({ poem, userId, onLike }: PoemFeedCardProps) {
+export function PoemFeedCard({ poem, userId, onLike, onOpen }: PoemFeedCardProps) {
   const isLiked = poem.likes.includes(userId);
+  const openPoem = () => onOpen(poem);
 
   return (
     <motion.div
@@ -49,13 +51,31 @@ export function PoemFeedCard({ poem, userId, onLike }: PoemFeedCardProps) {
       className="h-full"
     >
       <BackgroundGradient className="rounded-2xl p-[1px] h-full">
-        <div className="rounded-2xl bg-neutral-900 p-6 border border-white/10 h-full flex flex-col justify-between">
+        <div
+          onClick={openPoem}
+          className="rounded-2xl bg-neutral-900 p-6 border border-white/10 h-full flex flex-col justify-between cursor-pointer transition-colors hover:border-white/20"
+          title="Read full poem"
+        >
           <div>
             {/* Header */}
             <div className="mb-4">
-              <h3 className={`text-xl font-bold text-white mb-2 ${getFontClass(poem.font)}`}>
-                {poem.title}
-              </h3>
+              <div className="mb-2 flex items-start justify-between gap-3">
+                <h3 className={`text-xl font-bold text-white ${getFontClass(poem.font)}`}>
+                  {poem.title}
+                </h3>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openPoem();
+                  }}
+                  className="shrink-0 rounded-md p-1 text-gray-500 transition-colors hover:bg-neutral-800 hover:text-indigo-300"
+                  aria-label={`Read ${poem.title}`}
+                  title="Read full poem"
+                >
+                  <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
               <div className="flex items-center gap-2 text-sm text-gray-400">
                 <UserIcon className="h-4 w-4" />
                 <span>{getAuthorDisplay(poem)}</span>
@@ -98,7 +118,10 @@ export function PoemFeedCard({ poem, userId, onLike }: PoemFeedCardProps) {
           {/* Like button & footer */}
           <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/5">
             <button
-              onClick={() => onLike(poem.id)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onLike(poem.id);
+              }}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer ${
                 isLiked
                   ? "bg-red-600 hover:bg-red-700 text-white"

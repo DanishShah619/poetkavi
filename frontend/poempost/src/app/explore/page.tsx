@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
 import Navbar from "@/components/ui/Navbar";
 import { Meteors } from "@/components/ui/meteors";
 import { cn } from "@/lib/utils";
@@ -10,7 +12,20 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useInfiniteFeed } from "@/hooks/useInfiniteFeed";
 import { PoemFeedCard } from "@/components/explore/PoemFeedCard";
 import { PoemCardSkeleton } from "@/components/explore/PoemCardSkeleton";
-import { Search, Filter } from "lucide-react";
+import { Calendar, Filter, Heart, Search, User as UserIcon, X } from "lucide-react";
+
+const getAuthorDisplay = (poem: ReturnType<typeof useInfiniteFeed>["poems"][number]) =>
+  poem.authorName || poem.authorEmail?.split("@")[0] || "Poet";
+
+const formatPoemDate = (seconds: number | undefined) => {
+  if (seconds === undefined) return "";
+
+  return new Date(seconds * 1000).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
 
 const ExplorePage: React.FC = () => {
   const { currentUser: user, loading: authLoading, logOut } = useAuth();
@@ -19,6 +34,7 @@ const ExplorePage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [fontFilter, setFontFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
+  const [selectedPoem, setSelectedPoem] = useState<ReturnType<typeof useInfiniteFeed>["poems"][number] | null>(null);
 
   const debouncedSearch = useDebounce(searchTerm, 400);
 
@@ -75,6 +91,69 @@ const ExplorePage: React.FC = () => {
 
   return (
     <div className="relative min-h-screen w-full bg-black/[0.96] antialiased">
+      {selectedPoem && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setSelectedPoem(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 20 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            onClick={(event) => event.stopPropagation()}
+            className="relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-[#0f0f0f] shadow-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-6 py-4">
+              <h2 className="truncate pr-4 text-xl font-bold tracking-tight text-white">
+                {selectedPoem.title}
+              </h2>
+              <button
+                onClick={() => setSelectedPoem(null)}
+                className="rounded-full p-1 text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-white"
+                aria-label="Close poem reader"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              {selectedPoem.imageUrl && (
+                <Image
+                  src={selectedPoem.imageUrl}
+                  alt={selectedPoem.title}
+                  width={640}
+                  height={400}
+                  className="mb-6 max-h-80 w-full rounded-lg border border-neutral-800 object-contain"
+                />
+              )}
+              {selectedPoem.content && (
+                <pre className="whitespace-pre-wrap text-center font-serif text-base leading-8 text-neutral-200">
+                  {selectedPoem.content}
+                </pre>
+              )}
+            </div>
+
+            <div className="flex shrink-0 flex-col gap-3 border-t border-neutral-800 bg-neutral-950/60 px-6 py-3 text-xs text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="flex items-center gap-1">
+                  <UserIcon className="h-3.5 w-3.5" />
+                  {getAuthorDisplay(selectedPoem)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {formatPoemDate(selectedPoem.createdAt?.seconds)}
+                </span>
+              </div>
+              <span className="flex items-center gap-1">
+                <Heart className="h-3.5 w-3.5 text-red-400" />
+                {selectedPoem.likes?.length ?? 0} likes
+              </span>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <div
         className={cn(
           "pointer-events-none absolute inset-0 z-0 [background-size:40px_40px] select-none",
@@ -200,6 +279,7 @@ const ExplorePage: React.FC = () => {
                     poem={poem}
                     userId={user.uid}
                     onLike={handleLike}
+                    onOpen={setSelectedPoem}
                   />
                 ))}
               </div>
