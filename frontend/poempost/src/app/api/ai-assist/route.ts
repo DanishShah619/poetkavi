@@ -6,7 +6,7 @@ import { FieldValue } from "firebase-admin/firestore";
 // Firestore-backed rate limiter — survives serverless cold starts and
 // horizontal scaling. Uses a single document per user in rateLimits/{uid}.
 // ---------------------------------------------------------------------------
-const MAX_REQUESTS = 3;           // requests allowed per window
+const MAX_REQUESTS = 10;           // requests allowed per window
 const WINDOW_MS    = 60 * 60 * 1000; // 1-hour window
 
 interface RateEntry {
