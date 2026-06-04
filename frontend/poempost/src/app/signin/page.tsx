@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn, signInWithGoogle } from '@/lib/authService';
 import { LampContainer } from '@/components/ui/lamp';
 import { motion } from 'motion/react';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect')?.startsWith('/')
+    ? searchParams.get('redirect')
+    : '/dashboard';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +33,7 @@ export default function LoginPage() {
     try {
       const result = await signIn(email, password);
       if (result.success) {
-        router.push('/dashboard');
+        router.push(redirectTo || '/dashboard');
       } else {
         setError(result.error || 'Sign in failed. Please try again.');
       }
@@ -50,7 +54,7 @@ export default function LoginPage() {
       // On mobile (redirect flow) result.user is null — navigation happens post-redirect
       // On desktop (popup flow) navigate immediately on success
       if (result.success && result.user) {
-        router.push('/dashboard');
+        router.push(redirectTo || '/dashboard');
       } else if (result.error) {
         setError(result.error);
       }
@@ -199,5 +203,13 @@ export default function LoginPage() {
         </motion.div>
       </div>
     </LampContainer>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

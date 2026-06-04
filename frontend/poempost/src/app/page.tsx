@@ -150,7 +150,11 @@ export default function Home() {
                 {featuredPoems.map((poem) => (
                   <article
                     key={poem.id}
-                    className="flex min-h-40 flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50 text-left backdrop-blur-sm transition-all duration-300 hover:border-neutral-700"
+                    onClick={() =>
+                      router.push(`/explore?poemId=${encodeURIComponent(poem.id)}`)
+                    }
+                    className="flex min-h-40 cursor-pointer flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50 text-left backdrop-blur-sm transition-all duration-300 hover:border-neutral-700 hover:bg-neutral-900/70"
+                    title="Read this poem in Explore"
                   >
                     {poem.imageUrl ? (
                       <Image

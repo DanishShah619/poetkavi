@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signUp, signInWithGoogle } from '@/lib/authService';
 import { LampContainer } from '@/components/ui/lamp';
 import { motion } from 'motion/react';
 
-export default function SignUpPage() {
+function SignUpPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect')?.startsWith('/')
+    ? searchParams.get('redirect')
+    : '/dashboard';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +33,7 @@ export default function SignUpPage() {
     try {
       const result = await signUp(email, password, fullName.trim());
       if (result.success) {
-        router.push('/dashboard');
+        router.push(redirectTo || '/dashboard');
       } else {
         setError(result.error || 'Sign up failed. Please try again.');
       }
@@ -48,7 +52,7 @@ export default function SignUpPage() {
       const result = await signInWithGoogle();
       // Desktop popup: navigate immediately; mobile redirect: handled post-redirect
       if (result.success && result.user) {
-        router.push('/dashboard');
+        router.push(redirectTo || '/dashboard');
       } else if (result.error) {
         setError(result.error);
       }
@@ -178,7 +182,7 @@ export default function SignUpPage() {
               <div className="mt-6 text-center">
                 <p className="text-slate-400 text-sm">
                   Already have an account?{' '}
-                  <a href="/signin" className="text-cyan-400 hover:text-cyan-300 transition-colors duration-200">
+                  <a href={`/signin${redirectTo && redirectTo !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`} className="text-cyan-400 hover:text-cyan-300 transition-colors duration-200">
                     Sign in
                   </a>
                 </p>
@@ -188,5 +192,13 @@ export default function SignUpPage() {
         </motion.div>
       </div>
     </LampContainer>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignUpPageContent />
+    </Suspense>
   );
 }

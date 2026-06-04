@@ -1,20 +1,20 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { Suspense, useEffect, useState, useRef } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import Navbar from "@/components/ui/Navbar";
 import { Meteors } from "@/components/ui/meteors";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useInfiniteFeed } from "@/hooks/useInfiniteFeed";
+import { Poem, useInfiniteFeed } from "@/hooks/useInfiniteFeed";
 import { PoemFeedCard } from "@/components/explore/PoemFeedCard";
 import { PoemCardSkeleton } from "@/components/explore/PoemCardSkeleton";
 import { Calendar, Filter, Heart, Search, User as UserIcon, X } from "lucide-react";
 
-const getAuthorDisplay = (poem: ReturnType<typeof useInfiniteFeed>["poems"][number]) =>
+const getAuthorDisplay = (poem: Poem) =>
   poem.authorName || poem.authorEmail?.split("@")[0] || "Poet";
 
 const formatPoemDate = (seconds: number | undefined) => {
@@ -27,23 +27,27 @@ const formatPoemDate = (seconds: number | undefined) => {
   });
 };
 
-const ExplorePage: React.FC = () => {
+const ExplorePageContent: React.FC = () => {
   const { currentUser: user, loading: authLoading, logOut } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const targetPoemId = searchParams.get("poemId");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [fontFilter, setFontFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
-  const [selectedPoem, setSelectedPoem] = useState<ReturnType<typeof useInfiniteFeed>["poems"][number] | null>(null);
+  const [selectedPoem, setSelectedPoem] = useState<Poem | null>(null);
 
   const debouncedSearch = useDebounce(searchTerm, 400);
 
   // Auth guard
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push("/signin");
+      const nextPath = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+      router.push(`/signin?redirect=${encodeURIComponent(nextPath)}`);
     }
-  }, [authLoading, user, router]);
+  }, [authLoading, pathname, router, searchParams, user]);
 
   const {
     poems,
@@ -61,6 +65,7 @@ const ExplorePage: React.FC = () => {
   });
 
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadedTargetPoemRef = useRef<string | null>(null);
 
   // Intersection Observer for Infinite Scroll
   useEffect(() => {
@@ -78,6 +83,52 @@ const ExplorePage: React.FC = () => {
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
   }, [hasMore, loadingMore, loading, loadMore]);
+
+  useEffect(() => {
+    if (!targetPoemId || !user || authLoading || loading) return;
+    if (loadedTargetPoemRef.current === targetPoemId) return;
+
+    const poemFromFeed = poems.find((poem) => poem.id === targetPoemId);
+    if (poemFromFeed) {
+      loadedTargetPoemRef.current = targetPoemId;
+      setSelectedPoem(poemFromFeed);
+      return;
+    }
+
+    let cancelled = false;
+    const signedInUser = user;
+
+    async function loadTargetPoem() {
+      try {
+        const token = await signedInUser.getIdToken();
+        const response = await fetch(`/api/poems/${targetPoemId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Poem request failed: ${response.status}`);
+        }
+
+        const data = (await response.json()) as { poem?: Poem };
+
+        if (!cancelled && data.poem) {
+          loadedTargetPoemRef.current = targetPoemId;
+          setSelectedPoem(data.poem);
+        }
+      } catch (error) {
+        console.error("[explore] Failed to open linked poem:", error);
+        loadedTargetPoemRef.current = targetPoemId;
+      }
+    }
+
+    loadTargetPoem();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, loading, poems, targetPoemId, user]);
 
   if (authLoading) {
     return (
@@ -335,4 +386,16 @@ const ExplorePage: React.FC = () => {
   );
 };
 
-export default ExplorePage;
+export default function ExplorePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="relative min-h-screen w-full bg-black/[0.96] antialiased flex items-center justify-center">
+          <div className="text-white text-xl">Loading...</div>
+        </div>
+      }
+    >
+      <ExplorePageContent />
+    </Suspense>
+  );
+}
