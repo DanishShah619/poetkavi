@@ -96,7 +96,7 @@ export default function CollaboratePage({ params }: PageProps) {
           return;
         }
 
-        setPoem({ id: docSnap.id, ...data });
+        setPoem({ id: docSnap.id, ...data } as PoemData);
         setLoadingPoem(false);
       },
       (err) => {
@@ -204,7 +204,7 @@ export default function CollaboratePage({ params }: PageProps) {
   }
 
   const isOwner = poem.authorId === user?.uid;
-  const isAllowedEditor = isOwner || poem.allowedEditors?.includes(user?.uid) || poem.allowedEditorsEmails?.includes(user?.email);
+  const isAllowedEditor = isOwner || poem.allowedEditors?.includes(user?.uid ?? "") || poem.allowedEditorsEmails?.includes(user?.email ?? "");
 
   return (
     <div className="relative min-h-screen w-full bg-black/[0.96] antialiased">
@@ -413,7 +413,7 @@ function ActiveUsersList() {
     <div className="flex items-center gap-1.5">
       <div className="flex -space-x-2 overflow-hidden mr-1">
         {others.map((other) => {
-          const color = getRandomColor(other.id);
+          const color = getRandomColor(other.id ?? "");
           const initial = other.info?.name ? other.info.name.charAt(0).toUpperCase() : "?";
           return (
             <div

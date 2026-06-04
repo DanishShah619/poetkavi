@@ -41,14 +41,14 @@ export function CollaborativeEditor({
   // Configure editor once — will not be re-created during subsequent state updates
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ history: false }), // History is managed by Yjs, not Tiptap
-      Collaboration.configure({ document: provider.doc }),
+      StarterKit, // Collaboration extension automatically disables Tiptap's built-in history
+      Collaboration.configure({ document: provider.getYDoc() }),
       CollaborationCursor.configure({
         provider: provider,
         user: self
           ? {
-              name: self.info.name,
-              color: getRandomColor(self.id),
+              name: (self.info?.name as string) ?? "Anonymous",
+              color: getRandomColor(self.id ?? ""),
             }
           : undefined,
       }),
@@ -59,8 +59,8 @@ export function CollaborativeEditor({
   useEffect(() => {
     if (editor && self) {
       editor.commands.updateUser({
-        name: self.info.name,
-        color: getRandomColor(self.id),
+        name: (self.info?.name as string) ?? "Anonymous",
+        color: getRandomColor(self.id ?? ""),
       });
     }
   }, [editor, self]);
@@ -70,7 +70,7 @@ export function CollaborativeEditor({
   useEffect(() => {
     if (!editor || isSeeded.current) return;
 
-    const xmlFragment = provider.doc.getXmlFragment("default");
+    const xmlFragment = provider.getYDoc().getXmlFragment("default");
 
     if (xmlFragment.length === 0 && initialContent) {
       editor.commands.setContent(initialContent);

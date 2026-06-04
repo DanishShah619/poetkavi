@@ -55,23 +55,6 @@ export async function POST(request: Request) {
       (poemData?.allowedViewers && Array.isArray(poemData.allowedViewers) && poemData.allowedViewers.includes(userId)) ||
       (poemData?.allowedViewersEmails && Array.isArray(poemData.allowedViewersEmails) && decodedToken.email && poemData.allowedViewersEmails.includes(decodedToken.email));
 
-    // Determine access permissions: only owners and explicit editors can write, allowedViewers can read.
-    let permission: "room:write" | "room:read" | null = null;
-
-    if (isOwner || isEditor) {
-      permission = "room:write";
-    } else if (isViewer) {
-      permission = "room:read";
-    }
-
-    // Deny access if they are neither the owner, an editor, nor a viewer
-    if (!permission) {
-      return new NextResponse(JSON.stringify({ error: "Forbidden: You do not have permission to collaborate on this poem" }), {
-        status: 403,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
     // 5. Start secure Liveblocks session with specific user details
     const session = liveblocks.prepareSession(userId, {
       userInfo: {
@@ -80,8 +63,21 @@ export async function POST(request: Request) {
       },
     });
 
-    // Grant correct permission level to that specific room
-    session.allow(room, permission);
+    // Determine access permissions using session's typed readonly tuple constants.
+    // session.FULL_ACCESS = readonly ["room:write"]
+    // session.READ_ACCESS = readonly ["room:read", "room:presence:write"]
+    // These satisfy the `readonly Permission[]` parameter of session.allow().
+    if (isOwner || isEditor) {
+      session.allow(room, session.FULL_ACCESS);
+    } else if (isViewer) {
+      session.allow(room, session.READ_ACCESS);
+    } else {
+      // Deny access if they are neither the owner, an editor, nor a viewer
+      return new NextResponse(JSON.stringify({ error: "Forbidden: You do not have permission to collaborate on this poem" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     const { status, body } = await session.authorize();
     return new NextResponse(body, { 
