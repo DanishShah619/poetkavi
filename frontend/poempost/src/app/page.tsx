@@ -2,11 +2,93 @@
 
 import { AnimatedText } from "@/components/ui/color-generate";
 import { Spotlight } from "@/components/ui/spotlight";
+import { Github, Instagram, Mail, Phone } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+
+type FeaturedPoem = {
+  id: string;
+  title: string;
+  content: string;
+  imageUrl?: string | null;
+};
+
+const FEATURED_AUTHOR_NAME = "shanildanshah";
+const FEATURED_POEM_LIMIT = 3;
+const OWNER_NAME = "Danish Shah";
+const OWNER_EMAIL = "shanildanshah@gmail.com";
+const OWNER_PHONE = "+91 9123707332";
+const OWNER_GITHUB_URL = "https://github.com/DanishShah619";
+const OWNER_INSTAGRAM_URL = "https://www.instagram.com/danish_shanil/";
+
+const footerLinks = [
+  {
+    label: "GitHub",
+    href: OWNER_GITHUB_URL,
+    icon: Github,
+  },
+  {
+    label: "Gmail",
+    href: `mailto:${OWNER_EMAIL}`,
+    icon: Mail,
+  },
+  {
+    label: "Phone",
+    href: OWNER_PHONE ? `tel:${OWNER_PHONE.replace(/[^\d+]/g, "")}` : null,
+    icon: Phone,
+  },
+  {
+    label: "Instagram",
+    href: OWNER_INSTAGRAM_URL,
+    icon: Instagram,
+  },
+];
 
 export default function Home() {
   const router = useRouter();
+  const [featuredPoems, setFeaturedPoems] = useState<FeaturedPoem[]>([]);
+  const [isLoadingFeaturedPoems, setIsLoadingFeaturedPoems] = useState(true);
+  const [featuredPoemsError, setFeaturedPoemsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadFeaturedPoems() {
+      try {
+        const response = await fetch(
+          `/api/featured-poems?author=${encodeURIComponent(FEATURED_AUTHOR_NAME)}&limit=${FEATURED_POEM_LIMIT}`
+        );
+
+        if (!response.ok) {
+          throw new Error(`Featured poems request failed: ${response.status}`);
+        }
+
+        const { poems } = (await response.json()) as { poems: FeaturedPoem[] };
+
+        if (isMounted) {
+          setFeaturedPoems(Array.isArray(poems) ? poems : []);
+          setFeaturedPoemsError(null);
+        }
+      } catch (error) {
+        console.error("Failed to load featured poems:", error);
+        if (isMounted) {
+          setFeaturedPoemsError("Featured poems are temporarily unavailable.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingFeaturedPoems(false);
+        }
+      }
+    }
+
+    loadFeaturedPoems();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="relative flex min-h-screen w-full bg-black/[0.96] antialiased flex-col items-center">
@@ -43,20 +125,58 @@ export default function Home() {
           {/* Featured Poems section */}
           <div className="mb-24 text-center">
             <h2 className="text-3xl font-bold text-neutral-100 mb-10 tracking-tight">Featured Poems</h2>
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="p-6 bg-neutral-900/50 rounded-xl border border-neutral-800 hover:border-neutral-700 transition-all duration-300 backdrop-blur-sm">
-                <h3 className="text-xl font-semibold text-neutral-200 mb-3">The Silent Dawn</h3>
-                <p className="text-neutral-400 text-sm leading-relaxed">A poem about the quiet beauty of morning...</p>
+            {isLoadingFeaturedPoems ? (
+              <div className="grid gap-6 md:grid-cols-3">
+                {Array.from({ length: FEATURED_POEM_LIMIT }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="min-h-40 rounded-xl border border-neutral-800 bg-neutral-900/40 p-6 backdrop-blur-sm"
+                  >
+                    <div className="mb-4 h-5 w-3/4 rounded bg-neutral-800" />
+                    <div className="space-y-2">
+                      <div className="h-3 rounded bg-neutral-800/80" />
+                      <div className="h-3 rounded bg-neutral-800/70" />
+                      <div className="h-3 w-2/3 rounded bg-neutral-800/60" />
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="p-6 bg-neutral-900/50 rounded-xl border border-neutral-800 hover:border-neutral-700 transition-all duration-300 backdrop-blur-sm">
-                <h3 className="text-xl font-semibold text-neutral-200 mb-3">Ocean&apos;s Whisper</h3>
-                <p className="text-neutral-400 text-sm leading-relaxed">Waves carry stories of distant shores...</p>
+            ) : featuredPoemsError ? (
+              <p className="rounded-xl border border-neutral-800 bg-neutral-900/40 px-5 py-4 text-sm text-neutral-400">
+                {featuredPoemsError}
+              </p>
+            ) : featuredPoems.length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-3">
+                {featuredPoems.map((poem) => (
+                  <article
+                    key={poem.id}
+                    className="flex min-h-40 flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50 text-left backdrop-blur-sm transition-all duration-300 hover:border-neutral-700"
+                  >
+                    {poem.imageUrl ? (
+                      <Image
+                        src={poem.imageUrl}
+                        alt={poem.title}
+                        width={600}
+                        height={240}
+                        className="h-36 w-full object-cover"
+                      />
+                    ) : null}
+                    <div className="flex flex-1 flex-col p-6">
+                      <h3 className="mb-3 text-xl font-semibold text-neutral-200">
+                        {poem.title}
+                      </h3>
+                      <p className="line-clamp-5 whitespace-pre-line text-sm leading-relaxed text-neutral-400">
+                        {poem.content || "Image poem by shanildanshah."}
+                      </p>
+                    </div>
+                  </article>
+                ))}
               </div>
-              <div className="p-6 bg-neutral-900/50 rounded-xl border border-neutral-800 hover:border-neutral-700 transition-all duration-300 backdrop-blur-sm">
-                <h3 className="text-xl font-semibold text-neutral-200 mb-3">City Lights</h3>
-                <p className="text-neutral-400 text-sm leading-relaxed">Urban poetry about the rhythm of life...</p>
-              </div>
-            </div>
+            ) : (
+              <p className="rounded-xl border border-neutral-800 bg-neutral-900/40 px-5 py-4 text-sm text-neutral-400">
+                No featured poems from shanildanshah are available yet.
+              </p>
+            )}
           </div>
 
           {/* Join Community section */}
@@ -83,6 +203,47 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <footer className="relative z-10 w-full border-t border-neutral-800/80 bg-black/30 px-4 py-8">
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-6 text-center text-sm text-neutral-400 sm:flex-row sm:text-left">
+          <div>
+            <p className="font-medium text-neutral-200">PoemKavi</p>
+            <p>You Write The Word, We Spread It.</p>
+          </div>
+
+          <div className="flex flex-col items-center gap-3 sm:items-end">
+            <p>
+              Developed by <span className="font-medium text-neutral-200">{OWNER_NAME}</span>
+            </p>
+            <div className="flex items-center gap-3">
+              {footerLinks.map(({ label, href, icon: Icon }) =>
+                href ? (
+                  <a
+                    key={label}
+                    href={href}
+                    target={href.startsWith("http") ? "_blank" : undefined}
+                    rel={href.startsWith("http") ? "noreferrer" : undefined}
+                    aria-label={label}
+                    title={label}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900/70 text-neutral-300 transition-colors hover:border-neutral-600 hover:bg-neutral-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:ring-offset-2 focus:ring-offset-black"
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                ) : (
+                  <span
+                    key={label}
+                    aria-label={`${label} not configured`}
+                    title={`${label} not configured`}
+                    className="inline-flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-lg border border-neutral-900 bg-neutral-950/70 text-neutral-700"
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
