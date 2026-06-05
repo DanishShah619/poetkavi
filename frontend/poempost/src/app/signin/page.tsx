@@ -9,9 +9,11 @@ import { motion } from 'motion/react';
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirect')?.startsWith('/')
-    ? searchParams.get('redirect')
-    : '/dashboard';
+  const redirectParam = searchParams.get('redirect');
+  const redirectTo =
+    redirectParam?.startsWith('/') && !redirectParam.startsWith('//')
+      ? redirectParam
+      : '/dashboard';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,7 +52,7 @@ function LoginPageContent() {
     setGoogleLoading(true);
 
     try {
-      const result = await signInWithGoogle();
+      const result = await signInWithGoogle(redirectTo);
       // On mobile (redirect flow) result.user is null — navigation happens post-redirect
       // On desktop (popup flow) navigate immediately on success
       if (result.success && result.user) {

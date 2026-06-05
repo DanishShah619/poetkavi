@@ -9,9 +9,11 @@ import { motion } from 'motion/react';
 function SignUpPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirect')?.startsWith('/')
-    ? searchParams.get('redirect')
-    : '/dashboard';
+  const redirectParam = searchParams.get('redirect');
+  const redirectTo =
+    redirectParam?.startsWith('/') && !redirectParam.startsWith('//')
+      ? redirectParam
+      : '/dashboard';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,7 +51,7 @@ function SignUpPageContent() {
     setError('');
     setGoogleLoading(true);
     try {
-      const result = await signInWithGoogle();
+      const result = await signInWithGoogle(redirectTo);
       // Desktop popup: navigate immediately; mobile redirect: handled post-redirect
       if (result.success && result.user) {
         router.push(redirectTo || '/dashboard');

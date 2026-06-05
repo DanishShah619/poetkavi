@@ -14,7 +14,7 @@ export interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string, displayName?: string) => Promise<AuthResult>;
   signIn: (email: string, password: string) => Promise<AuthResult>;
-  signInWithGoogle: () => Promise<AuthResult>;
+  signInWithGoogle: (redirectTo?: string) => Promise<AuthResult>;
   logOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
 }
@@ -23,6 +23,7 @@ export interface AuthResult {
   success: boolean;
   user?: User | null;
   error: string | null;
+  redirectTo?: string;
 }
 
 export interface AuthFormData {

@@ -34,16 +34,37 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const [redirectInitialized, setRedirectInitialized] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const loading = !authInitialized || !redirectInitialized;
 
   useEffect(() => {
-    handleGoogleRedirectResult().catch((err) => {
-      console.error('Error processing Google redirect:', err);
-    });
-    // Result is picked up automatically by onAuthStateChanged below
-  }, []);
+    let mounted = true;
+
+    handleGoogleRedirectResult()
+      .then((result) => {
+        if (!mounted) return;
+
+        if (result?.success && result.user) {
+          setCurrentUser(result.user);
+          router.replace(result.redirectTo || '/dashboard');
+        } else if (result?.error) {
+          console.error('Error processing Google redirect:', result.error);
+        }
+      })
+      .catch((err) => {
+        console.error('Error processing Google redirect:', err);
+      })
+      .finally(() => {
+        if (mounted) setRedirectInitialized(true);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
 
   // Auth listener — subscribe once for the entire app lifetime.
   // Do NOT include router or pathname here; doing so causes Firebase to tear
@@ -54,7 +75,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const unsubscribe = onAuthStateChange((user) => {
       if (!mounted) return;
       setCurrentUser(user);
-      setLoading(false);
+      setAuthInitialized(true);
     });
 
     return () => {
@@ -99,9 +120,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signInWithGoogle = async (): Promise<AuthResult> => {
+  const signInWithGoogle = async (redirectTo?: string): Promise<AuthResult> => {
     try {
-      return await authSignInWithGoogle();
+      return await authSignInWithGoogle(redirectTo);
     } catch (error) {
       console.error('Google sign in error:', error);
       return {

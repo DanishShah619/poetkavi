@@ -23,6 +23,38 @@ googleProvider.setCustomParameters({ prompt: 'select_account' });
 googleProvider.addScope('email');
 googleProvider.addScope('profile');
 
+const GOOGLE_REDIRECT_PENDING_KEY = 'poempost:googleRedirectPending';
+const POST_AUTH_REDIRECT_KEY = 'poempost:postAuthRedirect';
+
+const getSafeRedirectPath = (path?: string | null): string => {
+  if (!path || !path.startsWith('/') || path.startsWith('//')) return '/dashboard';
+  return path;
+};
+
+const writeRedirectIntent = (redirectTo?: string) => {
+  if (typeof window === 'undefined') return;
+
+  sessionStorage.setItem(GOOGLE_REDIRECT_PENDING_KEY, 'true');
+  sessionStorage.setItem(POST_AUTH_REDIRECT_KEY, getSafeRedirectPath(redirectTo));
+};
+
+const readRedirectIntent = (): string => {
+  if (typeof window === 'undefined') return '/dashboard';
+  return getSafeRedirectPath(sessionStorage.getItem(POST_AUTH_REDIRECT_KEY));
+};
+
+const clearRedirectIntent = () => {
+  if (typeof window === 'undefined') return;
+
+  sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
+  sessionStorage.removeItem(POST_AUTH_REDIRECT_KEY);
+};
+
+export const hasPendingGoogleRedirect = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === 'true';
+};
+
 /**
  * Detects mobile browsers and WebViews where popups are blocked.
  * Uses redirect flow for these environments.
@@ -72,12 +104,13 @@ export const signIn = async (email: string, password: string): Promise<AuthResul
  * - Desktop: signInWithPopup (immediate result)
  * - Mobile / WebView: signInWithRedirect (result handled on next page load via handleGoogleRedirectResult)
  */
-export const signInWithGoogle = async (): Promise<AuthResult> => {
+export const signInWithGoogle = async (redirectTo?: string): Promise<AuthResult> => {
   try {
     await setPersistence(auth, browserLocalPersistence);
 
     if (isMobileOrWebView()) {
       // Redirect flow — result is picked up by handleGoogleRedirectResult on next load
+      writeRedirectIntent(redirectTo);
       await signInWithRedirect(auth, googleProvider);
       // This line only reached if redirect somehow doesn't navigate away
       return { success: true, user: null, error: null };
@@ -99,14 +132,25 @@ export const signInWithGoogle = async (): Promise<AuthResult> => {
  */
 export const handleGoogleRedirectResult = async (): Promise<AuthResult | null> => {
   try {
+    await setPersistence(auth, browserLocalPersistence);
+
     const result = await getRedirectResult(auth);
     if (result?.user) {
-      return { success: true, user: result.user, error: null };
+      const redirectTo = readRedirectIntent();
+      clearRedirectIntent();
+      return { success: true, user: result.user, error: null, redirectTo };
+    }
+
+    if (hasPendingGoogleRedirect() && auth.currentUser) {
+      const redirectTo = readRedirectIntent();
+      clearRedirectIntent();
+      return { success: true, user: auth.currentUser, error: null, redirectTo };
     }
     return null; // No pending redirect — normal for desktop popup flow
   } catch (error) {
     const authError = error as AuthError;
     console.error('Redirect result error:', authError.code, authError.message);
+    clearRedirectIntent();
     return { success: false, user: null, error: getReadableErrorMessage(authError) };
   }
 };
