@@ -189,7 +189,7 @@
 .prose .tiptap h2 { font-size: 1.5rem; }
 .prose .tiptap h3 { font-size: 1.25rem; }
 
-.collaboration-cursor__caret {
+.collaboration-carets__caret {
   position: relative;
   margin-left: -1px;
   margin-right: -1px;
@@ -200,7 +200,7 @@
   pointer-events: none;
 }
 
-.collaboration-cursor__label {
+.collaboration-carets__label {
   position: absolute;
   top: -1.4em;
   left: -2px;
@@ -218,4 +218,3 @@
   z-index: 10;
   background-color: inherit;
 }
-

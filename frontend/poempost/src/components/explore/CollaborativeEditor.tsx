@@ -3,7 +3,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
-import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
+import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { useRoom, useSelf } from "@liveblocks/react";
 import React, { useEffect, useState, useRef } from "react";
 import { getYjsProviderForRoom } from "@liveblocks/yjs";
@@ -43,7 +43,7 @@ export function CollaborativeEditor({
     extensions: [
       StarterKit, // Collaboration extension automatically disables Tiptap's built-in history
       Collaboration.configure({ document: provider.getYDoc() }),
-      CollaborationCursor.configure({
+      CollaborationCaret.configure({
         provider: provider,
         user: self
           ? {
