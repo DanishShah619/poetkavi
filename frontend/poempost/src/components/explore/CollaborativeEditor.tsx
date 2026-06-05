@@ -5,7 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { useRoom, useSelf } from "@liveblocks/react";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { getYjsProviderForRoom } from "@liveblocks/yjs";
 import DOMPurify from "dompurify";
 
@@ -20,6 +20,8 @@ export function CollaborativeEditor({
 }: CollaborativeEditorProps) {
   const room = useRoom();
   const self = useSelf();
+  const selfName = (self?.info?.name as string | undefined) ?? "Anonymous";
+  const selfColor = getRandomColor(self?.id ?? "");
 
   // getYjsProviderForRoom is the recommended modern Liveblocks API.
   // It manages both the Yjs document and the Liveblocks WebSocket connection internally.
@@ -30,6 +32,7 @@ export function CollaborativeEditor({
   const lastSavedHtml = useRef<string>("");
   const isDirty = useRef<boolean>(false);
   const isSeeded = useRef<boolean>(false);
+  const lastCaretUserKey = useRef<string>("");
 
   // Destroy provider on unmount to prevent connection leaks
   useEffect(() => {
@@ -39,31 +42,38 @@ export function CollaborativeEditor({
   }, [provider]);
 
   // Configure editor once — will not be re-created during subsequent state updates
-  const editor = useEditor({
-    extensions: [
+  const extensions = useMemo(
+    () => [
       StarterKit, // Collaboration extension automatically disables Tiptap's built-in history
       Collaboration.configure({ document: provider.getYDoc() }),
       CollaborationCaret.configure({
         provider: provider,
-        user: self
-          ? {
-              name: (self.info?.name as string) ?? "Anonymous",
-              color: getRandomColor(self.id ?? ""),
-            }
-          : undefined,
+        user: {
+          name: "Anonymous",
+          color: getRandomColor(""),
+        },
       }),
     ],
+    [provider]
+  );
+
+  const editor = useEditor({
+    extensions,
   });
 
   // 1. Dynamic Cursor Updates: Re-bind active user details once Liveblocks presence resolves
   useEffect(() => {
-    if (editor && self) {
-      editor.commands.updateUser({
-        name: (self.info?.name as string) ?? "Anonymous",
-        color: getRandomColor(self.id ?? ""),
-      });
-    }
-  }, [editor, self]);
+    if (!editor) return;
+
+    const caretUserKey = `${selfName}:${selfColor}`;
+    if (lastCaretUserKey.current === caretUserKey) return;
+
+    lastCaretUserKey.current = caretUserKey;
+    editor.commands.updateUser({
+      name: selfName,
+      color: selfColor,
+    });
+  }, [editor, selfName, selfColor]);
 
   // 2. Initial Seeding: Populate an empty Yjs document with the poem's existing Firestore content.
   //    Only runs once (guarded by isSeeded ref) and only if the collaborative doc is blank.
