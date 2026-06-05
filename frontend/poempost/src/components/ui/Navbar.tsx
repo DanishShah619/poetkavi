@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { BarChart3, Plus, Compass, Home } from 'lucide-react';
+import { BarChart3, Plus, Compass, Home, LogOut } from 'lucide-react';
 import Image from 'next/image';
 
 interface NavbarProps {
@@ -12,141 +12,149 @@ interface NavbarProps {
   onLogout?: () => void;
 }
 
+const navItems = [
+  { path: '/dashboard', label: 'Dashboard', icon: BarChart3 },
+  { path: '/create', label: 'Create', icon: Plus },
+  { path: '/explore', label: 'Explore', icon: Compass },
+];
+
+const pageMeta: Record<string, { title: string; subtitle: string; gradient: string; icon: React.ElementType }> = {
+  '/dashboard': {
+    title: 'Dashboard',
+    subtitle: 'Overview & Analytics',
+    gradient: 'from-blue-500 to-blue-600',
+    icon: BarChart3,
+  },
+  '/create': {
+    title: 'Create',
+    subtitle: 'Build Something New',
+    gradient: 'from-green-500 to-green-600',
+    icon: Plus,
+  },
+  '/explore': {
+    title: 'Explore',
+    subtitle: 'Discover Content',
+    gradient: 'from-purple-500 to-purple-600',
+    icon: Compass,
+  },
+};
+
 const Navbar: React.FC<NavbarProps> = ({
   userEmail = 'user@example.com',
   userPhoto = '',
-  onLogout
+  onLogout,
 }) => {
   const pathname = usePathname();
+  const currentPage = pageMeta[pathname] ?? {
+    title: 'App',
+    subtitle: 'Welcome Back',
+    gradient: 'from-gray-500 to-gray-600',
+    icon: Home,
+  };
+  const CurrentIcon = currentPage.icon;
+  const avatarInitial = (userEmail || 'U').charAt(0).toUpperCase();
 
   const isActive = (path: string): boolean => pathname === path;
 
-  const getPageLogo = () => {
-    switch (pathname) {
-      case '/dashboard':
-        return {
-          title: 'Dashboard',
-          gradient: 'from-blue-500 to-blue-600',
-          icon: <BarChart3 className="w-6 h-6" />
-        };
-      case '/create':
-        return {
-          title: 'Create',
-          gradient: 'from-green-500 to-green-600',
-          icon: <Plus className="w-6 h-6" />
-        };
-      case '/explore':
-        return {
-          title: 'Explore',
-          gradient: 'from-purple-500 to-purple-600',
-          icon: <Compass className="w-6 h-6" />
-        };
-      default:
-        return {
-          title: 'App',
-          gradient: 'from-gray-500 to-gray-600',
-          icon: <Home className="w-6 h-6" />
-        };
-    }
-  };
-
-  const currentPage = getPageLogo();
-
-  const handleLogoutClick = () => {
-    console.log('Logout button clicked');
-    if (onLogout) onLogout();
-  };
-
   return (
-    <motion.nav
-      className="w-full px-8 py-4 border-b border-white/10 bg-black/20 backdrop-blur-sm fixed top-0 left-0 right-0 z-50"
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-    >
-      <div className="flex justify-between items-center w-full">
-
-        {/* Left: Logo and Title */}
-        <div className="flex items-center space-x-3">
-          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${currentPage.gradient} flex items-center justify-center text-white shadow-lg`}>
-            {currentPage.icon}
+    <>
+      <motion.nav
+        className="fixed left-0 right-0 top-0 z-50 w-full border-b border-white/10 bg-black/70 px-4 py-3 backdrop-blur-md md:px-8 md:py-4"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${currentPage.gradient} text-white shadow-lg md:h-12 md:w-12`}>
+              <CurrentIcon className="h-5 w-5 md:h-6 md:w-6" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-bold text-white md:text-xl">{currentPage.title}</h1>
+              <p className="truncate text-xs text-gray-400">{currentPage.subtitle}</p>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <h1 className="text-xl font-bold text-white">{currentPage.title}</h1>
-            <p className="text-xs text-gray-400">
-              {pathname === '/dashboard' ? 'Overview & Analytics' :
-                pathname === '/create' ? 'Build Something New' :
-                pathname === '/explore' ? 'Discover Content' :
-                'Welcome Back'}
-            </p>
-          </div>
-        </div>
 
-        {/* Center: Navigation Links */}
-        <div className="flex items-center space-x-6">
-          {[
-            { path: '/dashboard', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" /> },
-            { path: '/create', label: 'Create', icon: <Plus className="w-4 h-4" /> },
-            { path: '/explore', label: 'Explore', icon: <Compass className="w-4 h-4" /> }
-          ].map(({ path, label, icon }) => {
-            return (
-              <Link
-                key={path}
-                href={path}
-                className="block"
-              >
+          <div className="hidden items-center gap-3 md:flex">
+            {navItems.map(({ path, label, icon: Icon }) => (
+              <Link key={path} href={path} className="block">
                 <motion.div
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 cursor-pointer ${
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 font-medium transition-all duration-300 ${
                     isActive(path)
                       ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
-                      : 'text-gray-300 hover:text-white hover:bg-white/5'
+                      : 'text-gray-300 hover:bg-white/5 hover:text-white'
                   }`}
                 >
-                  {icon}
+                  <Icon className="h-4 w-4" />
                   <span>{label}</span>
                 </motion.div>
               </Link>
-            );
-          })}
-        </div>
-
-        {/* Right: User Info and Logout */}
-        <div className="flex items-center space-x-4">
-          <div className="text-right">
-            <p className="text-sm text-white font-medium">{userEmail}</p>
-            <p className="text-xs text-gray-400">Online</p>
+            ))}
           </div>
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            className="cursor-pointer"
-          >
+
+          <div className="flex shrink-0 items-center gap-3">
+            <div className="hidden max-w-48 text-right lg:block">
+              <p className="truncate text-sm font-medium text-white">{userEmail}</p>
+              <p className="text-xs text-gray-400">Online</p>
+            </div>
+
             {userPhoto ? (
               <Image
                 src={userPhoto}
                 alt="avatar"
                 width={40}
                 height={40}
-                className="w-10 h-10 rounded-full ring-2 ring-white/20 object-cover"
+                className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-white/20">
-                {userEmail.charAt(0).toUpperCase()}
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-red-600 text-sm font-bold text-white ring-2 ring-white/20">
+                {avatarInitial}
               </div>
             )}
-          </motion.div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleLogoutClick}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all duration-300 hover:shadow-lg hover:shadow-red-500/30 cursor-pointer"
-          >
-            Logout
-          </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onLogout}
+              className="hidden cursor-pointer rounded-lg bg-red-500 px-4 py-2 font-medium text-white transition-all duration-300 hover:bg-red-600 hover:shadow-lg hover:shadow-red-500/30 md:block"
+            >
+              Logout
+            </motion.button>
+
+            <button
+              type="button"
+              onClick={onLogout}
+              className="rounded-lg p-2 text-gray-300 transition-colors hover:bg-white/10 hover:text-white md:hidden"
+              aria-label="Logout"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
         </div>
-      </div>
-    </motion.nav>
+      </motion.nav>
+
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/85 px-3 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur-md md:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-3 gap-1">
+          {navItems.map(({ path, label, icon: Icon }) => (
+            <Link
+              key={path}
+              href={path}
+              className={`flex min-h-14 flex-col items-center justify-center rounded-xl px-2 py-1 text-xs font-medium transition-colors ${
+                isActive(path)
+                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/25'
+                  : 'text-gray-400 hover:bg-white/10 hover:text-white'
+              }`}
+              aria-current={isActive(path) ? 'page' : undefined}
+            >
+              <Icon className="mb-1 h-5 w-5" />
+              <span className="max-w-full truncate">{label}</span>
+            </Link>
+          ))}
+        </div>
+      </nav>
+    </>
   );
 };
 

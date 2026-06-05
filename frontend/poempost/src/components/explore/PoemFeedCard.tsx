@@ -3,14 +3,16 @@
 import React from "react";
 import Image from "next/image";
 import { motion } from "motion/react";
-import { Heart, Calendar, Maximize2, User as UserIcon } from "lucide-react";
+import { Heart, Calendar, Maximize2, MessageCircle, User as UserIcon } from "lucide-react";
 import { BackgroundGradient } from "@/components/ui/background-gradient";
 import { Poem } from "@/hooks/useInfiniteFeed";
 
 interface PoemFeedCardProps {
   poem: Poem;
   userId: string;
+  commentCount: number;
   onLike: (poemId: string) => void;
+  onComment: (poemId: string) => void;
   onOpen: (poem: Poem) => void;
 }
 
@@ -39,7 +41,14 @@ const getFontClass = (font: string) => {
   return map[font] ?? "font-inter";
 };
 
-export function PoemFeedCard({ poem, userId, onLike, onOpen }: PoemFeedCardProps) {
+export function PoemFeedCard({
+  poem,
+  userId,
+  commentCount,
+  onLike,
+  onComment,
+  onOpen,
+}: PoemFeedCardProps) {
   const isLiked = poem.likes.includes(userId);
   const openPoem = () => onOpen(poem);
 
@@ -115,22 +124,38 @@ export function PoemFeedCard({ poem, userId, onLike, onOpen }: PoemFeedCardProps
             </div>
           </div>
 
-          {/* Like button & footer */}
+          {/* Like/comment actions & footer */}
           <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/5">
-            <button
-              onClick={(event) => {
-                event.stopPropagation();
-                onLike(poem.id);
-              }}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer ${
-                isLiked
-                  ? "bg-red-600 hover:bg-red-700 text-white"
-                  : "bg-neutral-800 hover:bg-neutral-700 text-gray-300"
-              }`}
-            >
-              <Heart className={`h-4 w-4 ${isLiked ? "fill-current" : ""}`} />
-              <span>{poem.likes?.length ?? 0}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onLike(poem.id);
+                }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer ${
+                  isLiked
+                    ? "bg-red-600 hover:bg-red-700 text-white"
+                    : "bg-neutral-800 hover:bg-neutral-700 text-gray-300"
+                }`}
+                aria-label={isLiked ? "Unlike poem" : "Like poem"}
+              >
+                <Heart className={`h-4 w-4 ${isLiked ? "fill-current" : ""}`} />
+                <span>{poem.likes?.length ?? 0}</span>
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onComment(poem.id);
+                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neutral-800 text-gray-300 transition-colors hover:bg-neutral-700 hover:text-blue-300"
+                aria-label={`Comment on ${poem.title}`}
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span>{commentCount}</span>
+              </button>
+            </div>
             <div className="text-xs text-gray-500">Font: {poem.font}</div>
           </div>
         </div>

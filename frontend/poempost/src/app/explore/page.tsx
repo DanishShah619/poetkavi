@@ -4,15 +4,35 @@ import React, { Suspense, useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
+import {
+  addDoc,
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  Timestamp,
+  where,
+} from "firebase/firestore";
 import Navbar from "@/components/ui/Navbar";
 import { Meteors } from "@/components/ui/meteors";
 import { cn } from "@/lib/utils";
+import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Poem, useInfiniteFeed } from "@/hooks/useInfiniteFeed";
 import { PoemFeedCard } from "@/components/explore/PoemFeedCard";
 import { PoemCardSkeleton } from "@/components/explore/PoemCardSkeleton";
-import { Calendar, Filter, Heart, Search, User as UserIcon, X } from "lucide-react";
+import { Calendar, Filter, Heart, MessageCircle, Search, Send, User as UserIcon, X } from "lucide-react";
+
+interface Comment {
+  id: string;
+  text: string;
+  authorEmail: string | null;
+  authorId: string;
+  createdAt: Timestamp | null;
+  poemId: string;
+}
 
 const getAuthorDisplay = (poem: Poem) =>
   poem.authorName || poem.authorEmail?.split("@")[0] || "Poet";
@@ -21,6 +41,15 @@ const formatPoemDate = (seconds: number | undefined) => {
   if (seconds === undefined) return "";
 
   return new Date(seconds * 1000).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const formatCommentDate = (comment: Comment) => {
+  if (!comment.createdAt) return "";
+  return comment.createdAt.toDate().toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -38,6 +67,11 @@ const ExplorePageContent: React.FC = () => {
   const [fontFilter, setFontFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   const [selectedPoem, setSelectedPoem] = useState<Poem | null>(null);
+  const [showComments, setShowComments] = useState<string | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [newComment, setNewComment] = useState("");
+  const [loadingComment, setLoadingComment] = useState(false);
 
   const debouncedSearch = useDebounce(searchTerm, 400);
 
@@ -66,6 +100,7 @@ const ExplorePageContent: React.FC = () => {
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadedTargetPoemRef = useRef<string | null>(null);
+  const poemIdsKey = poems.map((poem) => poem.id).join("|");
 
   // Intersection Observer for Infinite Scroll
   useEffect(() => {
@@ -129,6 +164,91 @@ const ExplorePageContent: React.FC = () => {
       cancelled = true;
     };
   }, [authLoading, loading, poems, targetPoemId, user]);
+
+  useEffect(() => {
+    if (!poemIdsKey) {
+      setCommentCounts({});
+      return;
+    }
+
+    const poemIds = poemIdsKey.split("|");
+    const initialCounts = Object.fromEntries(poemIds.map((id) => [id, 0]));
+    setCommentCounts(initialCounts);
+
+    const unsubscribers: (() => void)[] = [];
+    for (let index = 0; index < poemIds.length; index += 30) {
+      const chunk = poemIds.slice(index, index + 30);
+      const unsubscribe = onSnapshot(
+        query(collection(db, "comments"), where("poemId", "in", chunk)),
+        (snapshot) => {
+          const chunkCounts: Record<string, number> = Object.fromEntries(
+            chunk.map((id) => [id, 0])
+          );
+
+          snapshot.docs.forEach((docSnap) => {
+            const poemId = docSnap.data().poemId;
+            if (typeof poemId === "string") {
+              chunkCounts[poemId] = (chunkCounts[poemId] ?? 0) + 1;
+            }
+          });
+
+          setCommentCounts((current) => ({ ...current, ...chunkCounts }));
+        }
+      );
+      unsubscribers.push(unsubscribe);
+    }
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [poemIdsKey]);
+
+  useEffect(() => {
+    if (!showComments) {
+      setComments([]);
+      setNewComment("");
+      return;
+    }
+
+    const unsubscribe = onSnapshot(
+      query(
+        collection(db, "comments"),
+        where("poemId", "==", showComments),
+        orderBy("createdAt", "desc")
+      ),
+      (snapshot) => {
+        const nextComments = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        })) as Comment[];
+        setComments(nextComments);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [showComments]);
+
+  const handleCommentSubmit = async (event: React.FormEvent, poemId: string) => {
+    event.preventDefault();
+    const text = newComment.trim();
+    if (!text || !user) return;
+
+    setLoadingComment(true);
+    try {
+      await addDoc(collection(db, "comments"), {
+        text,
+        poemId,
+        authorId: user.uid,
+        authorEmail: user.email,
+        createdAt: serverTimestamp(),
+      });
+      setNewComment("");
+    } catch (error) {
+      console.error("[explore] Failed to add comment:", error);
+    } finally {
+      setLoadingComment(false);
+    }
+  };
 
   if (authLoading) {
     return (
@@ -200,8 +320,81 @@ const ExplorePageContent: React.FC = () => {
                 <Heart className="h-3.5 w-3.5 text-red-400" />
                 {selectedPoem.likes?.length ?? 0} likes
               </span>
+              <button
+                type="button"
+                onClick={() => setShowComments(selectedPoem.id)}
+                className="flex items-center gap-1 transition-colors hover:text-blue-300"
+              >
+                <MessageCircle className="h-3.5 w-3.5 text-blue-400" />
+                {commentCounts[selectedPoem.id] ?? 0} comments
+              </button>
             </div>
           </motion.div>
+        </div>
+      )}
+
+      {showComments && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 text-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+              <h3 className="text-lg font-semibold">Comments</h3>
+              <button
+                type="button"
+                onClick={() => setShowComments(null)}
+                className="rounded-full p-1 text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-white"
+                aria-label="Close comments"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {comments.length === 0 ? (
+                <p className="py-8 text-center text-sm text-neutral-400">
+                  No comments yet. Be the first to comment.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {comments.map((comment) => (
+                    <div key={comment.id} className="border-b border-neutral-800 pb-3 last:border-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-neutral-200">
+                          {comment.authorEmail || "Poet"}
+                        </span>
+                        <span className="text-xs text-neutral-500">
+                          {formatCommentDate(comment)}
+                        </span>
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm text-neutral-300">{comment.text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <form
+              onSubmit={(event) => handleCommentSubmit(event, showComments)}
+              className="border-t border-neutral-800 p-4"
+            >
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newComment}
+                  onChange={(event) => setNewComment(event.target.value)}
+                  placeholder="Add a comment..."
+                  className="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-neutral-500 focus:border-blue-500"
+                />
+                <button
+                  type="submit"
+                  disabled={loadingComment || !newComment.trim()}
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-900 disabled:text-blue-200"
+                  aria-label="Post comment"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -329,7 +522,9 @@ const ExplorePageContent: React.FC = () => {
                     key={poem.id}
                     poem={poem}
                     userId={user.uid}
+                    commentCount={commentCounts[poem.id] ?? 0}
                     onLike={handleLike}
+                    onComment={setShowComments}
                     onOpen={setSelectedPoem}
                   />
                 ))}
